@@ -1,5 +1,7 @@
 # Codex intake — initial Dev gate (planning only)
 
+This initial assignment is preserved as provenance. For the current handoff, read [DECISIONS](DECISIONS.md), [GATES_AND_ROLES](GATES_AND_ROLES.md), and [Issue #1](https://github.com/bobrs/Application-Observatory/issues/1), including its gate comments. Only the documentation continuity increment is authorized; Increment 1 implementation remains unauthorized.
+
 ## Assignment
 
 You are the Dev gate. ChatGPT serves as the PM gate for interpretation and scope. The repository owner is Product Sponsor and gopher. The documents are proposals and constraints, not an immutable architecture.
