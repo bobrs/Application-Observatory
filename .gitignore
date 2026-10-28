@@ -15,5 +15,6 @@ playwright-report/
 *.sqlite
 *.sqlite-shm
 *.sqlite-wal
+*.sqlite-journal
 *.db
 # Do not commit secrets, local runtime data, or generated artifacts.
