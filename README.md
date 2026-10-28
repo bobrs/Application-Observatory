@@ -6,6 +6,48 @@ Application Observatory helps small and mid-market teams understand where softwa
 
 This is a **public, CC0 collaborative experiment**, primarily intended as a useful surface for teams rather than a commercial product. It starts by registering **itself** as its first application.
 
+## Run the local self-catalog (AO-INC-001)
+
+Requires **Node.js 24.22.1 or a newer supported 24.x patch** and npm (`.node-version` pins the tested runtime). From this checkout:
+
+```sh
+npm ci
+npm run verify
+npm start
+```
+
+Open **http://127.0.0.1:4310**. Follow **View application** for the self-entry's detail. Both pages show Development, Test and Production as unknown, with no recorded versions or observation sources. Project metadata is explicitly seeded, with source references and its first-recorded timestamp; that timestamp is not a runtime observation. The recorded next step is PM review followed by separate Sponsor merge authorization, labeled as a snapshot rather than live workflow state.
+
+The server always binds to `127.0.0.1`, accepts only local Host names, and offers GET/HEAD pages only. There are no editing, candidate or approval controls, no client JavaScript, and no automatic external requests. Use **Ctrl-C** to stop; restart with `npm start`. An occupied port causes startup to fail instead of starting a second service; use `AO_PORT=4311 npm start` if needed. `AO_PORT=0` selects a free loopback port printed at startup.
+
+### Local data, migration and recovery
+
+SQLite is stored **outside the checkout** as `catalog.sqlite` in:
+
+- macOS: `~/Library/Application Support/Application Observatory/`
+- Linux: `$XDG_DATA_HOME/application-observatory/`, or `~/.local/share/application-observatory/` when unset.
+- Windows: `%LOCALAPPDATA%/Application Observatory/`.
+
+Optionally set `AO_DATA_DIR` to an **absolute, local, unsynchronized directory**. The app rejects paths within the repository (including symlink aliases) and common synchronized folders. Custom sync locations cannot be identified reliably; choose the directory accordingly. Do not put mutable SQLite data on Google Drive, OneDrive, Dropbox or a shared network filesystem.
+
+On startup, migration **001** creates the catalog table transactionally and records SQLite `user_version=1`. A newer schema causes startup to fail rather than downgrade it. The self-entry is inserted only when absent; restarting neither duplicates it nor overwrites its metadata or original timestamp. There are no stored operational observations in this increment, so all environment states remain explicitly unknown.
+
+For a basic backup, stop the app and wait for exit, then copy `catalog.sqlite` to a separate local backup location. To check a restore, copy that backup into a new local data directory and start with `AO_DATA_DIR` pointing to it. Confirm the self-entry and original timestamp before using the restored copy. Do not copy a live database, overwrite your original data, or infer recoverability from a successful start. There is no automated backup integration.
+
+### Developer checks and UI evidence
+
+`npm run verify` type-checks, builds and runs Node tests. All tests use separately created temporary directories and remove them afterward; none use operator data. Checks include repeated seed, persistence across an actual server-process restart, explicit unknowns/provenance, read-only HTTP behavior and safe rendering. Tests require the compiled output; run `npm run build` before invoking `npm test` alone.
+
+Optional browser demo (macOS/Linux shell):
+
+```sh
+PLAYWRIGHT_BROWSERS_PATH=.cache/playwright npx playwright install chromium
+npm run build
+npm run demo
+```
+
+This installs a project-local browser, launches a disposable loopback instance, checks navigation and desktop/mobile layouts, and writes four screenshots plus `demo.json` to ignored `test-results/demo/`. It closes the browser/server and removes its data fixture. The report records the source commit and dirty state, environment, browser version and observed results. [Committed developer evidence and screenshots](docs/evidence/ao-inc-001/README.md) identify their source revision; the increment PR records final-head validation. Developer evidence is not independent Test acceptance; the native SQLite binding still needs checking on platforms other than those actually tested.
+
 ## Prime directive: mutual intelligibility
 
 Every consequential assertion about an application's state, purpose, readiness, or future should be intelligible, attributable, grounded, and open to correction.
@@ -13,6 +55,8 @@ Every consequential assertion about an application's state, purpose, readiness, 
 Manual entries, APIs, scrapes, CI results, and AI interpretations are welcome when source, time, scope, and limits are visible. A claim is not verification. An approval is not a deployment. A deployment is not proof of health.
 
 ## First development target: v0.1
+
+The full target spans three separately authorized increments. AO-INC-001 implements the read-only self-catalog subset; the remaining features below are future scope.
 
 - **Application list:** name, purpose, owner or steward, high-level Development/Test/Production state, and next meaningful decision.
 - **Application detail:** one or more Development candidates, recorded versions in Test and Production, notes, history, and explicit unknowns.
@@ -28,7 +72,7 @@ Manual entries, APIs, scrapes, CI results, and AI interpretations are welcome wh
 - **Product Sponsor / gopher — repository owner:** final product decisions, bounded work authorization, operational action.
 - **Test — separately designated:** testing and intake acceptance; Dev or PM review does not automatically count as independent Test sign-off.
 
-Current deliberation is [AO-GATE-001 / Issue #1](https://github.com/bobrs/Application-Observatory/issues/1). Read [DECISIONS](docs/DECISIONS.md) for the reported Dev assessment, PM concurrence and bounded Sponsor authorization, and [GATES_AND_ROLES](docs/GATES_AND_ROLES.md) for the Issue/branch/PR handoff convention. The initial [CODEX_INTAKE](docs/CODEX_INTAKE.md) remains available as provenance.
+Current implementation review is [AO-INC-001 / Issue #3](https://github.com/bobrs/Application-Observatory/issues/3). [AO-GATE-001 / Issue #1](https://github.com/bobrs/Application-Observatory/issues/1) records the earlier continuity deliberation. Read [DECISIONS](docs/DECISIONS.md) for provenance and bounded Sponsor instructions, and [GATES_AND_ROLES](docs/GATES_AND_ROLES.md) for the Issue/branch/PR handoff convention. The initial [CODEX_INTAKE](docs/CODEX_INTAKE.md) remains available as provenance.
 
 ## Explore the documents
 
@@ -49,4 +93,6 @@ This repository includes the [CC0 1.0 Universal](LICENSE) dedication so others c
 
 ## Present status
 
-Dev feasibility is **FEASIBLE (Sponsor-relayed report)**; [PM concurs](https://github.com/bobrs/Application-Observatory/issues/1#issuecomment-6480880258). The Sponsor authorized the documentation-only continuity branch and PR in the Dev session, as transcribed in [DECISIONS](docs/DECISIONS.md); PM review and Sponsor merge authorization remain pending. **Increment 1 implementation is not authorized.** The portal is not running, and no Test or Production acceptance has occurred.
+The documentation continuity increment was accepted and [PR #2 merged](https://github.com/bobrs/Application-Observatory/pull/2); [Issue #1 records the actual outcome](https://github.com/bobrs/Application-Observatory/issues/1#issuecomment-6481151297).
+
+The Product Sponsor directly authorized **AO-INC-001: running local self-catalog** in the Dev session, within Issue #3's scope; [DECISIONS](docs/DECISIONS.md) records this as a Dev transcription. This branch supplies that local read-only increment for PM review. Separate Sponsor authorization is required to merge. No independent Test acceptance, Production authorization, deployment or runtime health is established. Increments 2 and 3 remain outside scope.

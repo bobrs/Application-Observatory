@@ -1,6 +1,6 @@
 # Codex intake — initial Dev gate (planning only)
 
-This initial assignment is preserved as provenance. For the current handoff, read [DECISIONS](DECISIONS.md), [GATES_AND_ROLES](GATES_AND_ROLES.md), and [Issue #1](https://github.com/bobrs/Application-Observatory/issues/1), including its gate comments. Only the documentation continuity increment is authorized; Increment 1 implementation remains unauthorized.
+This initial assignment is preserved as provenance. For the latest handoff and bounded authorization, read [DECISIONS](DECISIONS.md), [GATES_AND_ROLES](GATES_AND_ROLES.md), the README and its linked active Issue. [Issue #1](https://github.com/bobrs/Application-Observatory/issues/1) retains the original gate history; it is not the current implementation instruction.
 
 ## Assignment
 
