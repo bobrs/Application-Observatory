@@ -3,6 +3,7 @@ import { chmodSync, lstatSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { dataDirectory } from './config.js';
 import { schema, schemaVersion } from './migrations/001-self-catalog.js';
+import { exerciseSchema } from './migrations/002-release-exercise.js';
 
 export interface Application {
   id: string;
@@ -31,8 +32,9 @@ export function openCatalog(directory?: string) {
     chmodSync(path, 0o600);
     db.transaction(() => {
       const version = db.pragma('user_version', { simple: true }) as number;
-      if (version > schemaVersion) throw new Error('Database schema is newer than this application; use the matching source version.');
+      if (version > 2) throw new Error('Database schema is newer than this application; use the matching source version.');
       if (version === 0) db.exec(schema);
+      if (version <= schemaVersion) db.exec(exerciseSchema);
       db.prepare(`INSERT INTO applications
         (id, name, purpose, stewardship, source_url, source_revision, recorded_at, next_decision, next_decision_source)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO NOTHING`).run(

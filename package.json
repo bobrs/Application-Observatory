@@ -1,6 +1,6 @@
 {
   "name": "application-observatory",
-  "version": "0.1.0-increment.1",
+  "version": "0.1.0-increment.2",
   "private": true,
   "type": "module",
   "license": "CC0-1.0",
@@ -11,9 +11,11 @@
     "typecheck": "tsc --noEmit",
     "build": "tsc",
     "start": "node dist/server.js",
+    "exercise": "node dist/server.js --exercise",
     "test": "node --test test/*.test.mjs",
     "verify": "npm run typecheck && npm run build && npm test",
-    "demo": "node scripts/capture-demo.mjs"
+    "demo": "node scripts/capture-demo.mjs",
+    "demo:exercise": "node scripts/capture-exercise.mjs"
   },
   "dependencies": {
     "better-sqlite3": "13.0.3",

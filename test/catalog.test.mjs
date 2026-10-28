@@ -22,7 +22,7 @@ test('migration and seed are repeatable and never replace persisted metadata', (
   assert.match(initial[0].source_url, /\/blob\/[0-9a-f]{40}\/docs\/PRODUCT_BRIEF\.md$/);
   catalog.close();
   const db = new Database(join(directory, 'catalog.sqlite'));
-  assert.equal(db.pragma('user_version', { simple: true }), 1);
+  assert.equal(db.pragma('user_version', { simple: true }), 2);
   db.prepare('UPDATE applications SET purpose = ? WHERE id = ?').run('Disposable persistence fixture', initial[0].id);
   db.close();
   for (let restart = 0; restart < 3; restart++) {
@@ -38,11 +38,11 @@ test('migration and seed are repeatable and never replace persisted metadata', (
 test('a newer database schema fails without seeding or downgrading it', (t) => {
   const directory = fixture(t);
   const db = new Database(join(directory, 'catalog.sqlite'));
-  db.pragma('user_version = 2');
+  db.pragma('user_version = 3');
   db.close();
   assert.throws(() => openCatalog(directory), /newer/);
   const unchanged = new Database(join(directory, 'catalog.sqlite'));
-  assert.equal(unchanged.pragma('user_version', { simple: true }), 2);
+  assert.equal(unchanged.pragma('user_version', { simple: true }), 3);
   assert.deepEqual(unchanged.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all(), []);
   unchanged.close();
 });
