@@ -32,6 +32,8 @@ Optionally set `AO_DATA_DIR` to an **absolute, local, unsynchronized directory**
 
 On startup, migration **001** creates the catalog table and migration **002** adds the exercise ledger, transactionally advancing SQLite to `user_version=2`. Existing schema-1 metadata and original timestamps are preserved. A newer schema causes startup to fail rather than downgrade it. The self-entry is inserted only when absent; restarting neither duplicates it nor overwrites its metadata. No operational observations about the real Observatory are inferred; its environment states remain explicitly unknown.
 
+If you need a rollback path to AO-INC-001, back up its stopped schema-1 database before the first run of this version. The older binary will refuse the upgraded schema-2 database; use the matching source version or your original backup.
+
 ## Run the disposable release exercise (AO-INC-002)
 
 With the pinned runtime selected and build complete:
@@ -70,7 +72,7 @@ npm run demo
 
 This installs a project-local browser, launches a disposable loopback instance, checks navigation and desktop/mobile layouts, and writes four screenshots plus `demo.json` to ignored `test-results/demo/`. It closes the browser/server and removes its data fixture. The report records the source commit and dirty state, environment, browser version and observed results. [Committed developer evidence and screenshots](docs/evidence/ao-inc-001/README.md) identify their source revision; the increment PR records final-head validation. Developer evidence is not independent Test acceptance; the native SQLite binding still needs checking on platforms other than those actually tested.
 
-`npm run demo:exercise` captures the distinct-stage exercise, success, decline/refusal, injected failure, stale request, missing receipt and unreadable observation using disposable targets. Screenshots/report go to ignored `test-results/exercise/`. `npm run verify` also exercises a real controller SIGKILL after target mutation, resume/reconciliation, duplicate submission, migration and scope checks. No operator data is used. Review evidence is committed separately with its exact source revision; the PR records final-head checks.
+`npm run demo:exercise` captures the distinct-stage exercise, success, decline/refusal, injected failure, stale request, missing receipt and unreadable observation using disposable targets. Screenshots/report go to ignored `test-results/exercise/`. `npm run verify` also exercises a real controller SIGKILL after target mutation, resume/reconciliation, duplicate submission, migration and scope checks. No operator data is used. [AO-INC-002 evidence and screenshots](docs/evidence/ao-inc-002/README.md) identify their clean source revision; the PR records final-head checks.
 
 ## Prime directive: mutual intelligibility
 
