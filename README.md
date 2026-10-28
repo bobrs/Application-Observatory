@@ -28,7 +28,7 @@ Manual entries, APIs, scrapes, CI results, and AI interpretations are welcome wh
 - **Product Sponsor / gopher — repository owner:** final product decisions, bounded work authorization, operational action.
 - **Test — separately designated:** testing and intake acceptance; Dev or PM review does not automatically count as independent Test sign-off.
 
-The next step is **planning-only Dev review**. Codex should read [CODEX_INTAKE](docs/CODEX_INTAKE.md) and stop for Sponsor/PM deliberation before implementing.
+Current deliberation is [AO-GATE-001 / Issue #1](https://github.com/bobrs/Application-Observatory/issues/1). Read [DECISIONS](docs/DECISIONS.md) for the reported Dev assessment, PM concurrence and bounded Sponsor authorization, and [GATES_AND_ROLES](docs/GATES_AND_ROLES.md) for the Issue/branch/PR handoff convention. The initial [CODEX_INTAKE](docs/CODEX_INTAKE.md) remains available as provenance.
 
 ## Explore the documents
 
@@ -49,4 +49,4 @@ This repository includes the [CC0 1.0 Universal](LICENSE) dedication so others c
 
 ## Present status
 
-Product brief prepared for review. Dev feasibility pending. Implementation not started. The portal is not yet running, and no Test or Production acceptance has occurred.
+Dev feasibility is **FEASIBLE (Sponsor-relayed report)**; [PM concurs](https://github.com/bobrs/Application-Observatory/issues/1#issuecomment-6480880258). The Sponsor authorized the documentation-only continuity branch and PR in the Dev session, as transcribed in [DECISIONS](docs/DECISIONS.md); PM review and Sponsor merge authorization remain pending. **Increment 1 implementation is not authorized.** The portal is not running, and no Test or Production acceptance has occurred.
