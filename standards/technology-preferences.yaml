@@ -1,0 +1,51 @@
+schema_version: "0.1-draft"
+profile: application-observatory-preferred-paths
+status: advisory
+principle: "Prefer familiar supportable options; permit justified divergence."
+technologies:
+  frontend:
+    preferred: ["HTML", "CSS", "TypeScript", "Vue", "Vite"]
+    alternatives_require_explanation: ["React"]
+    note: "React is permitted; this is a default path, not a prohibition."
+  cloudflare_web:
+    preferred: ["Astro", "Cloudflare", "Wrangler"]
+    when: "When workload and deployment target fit."
+  runtime:
+    preferred: ["Node.js"]
+  api:
+    candidates: ["Node.js", "TypeScript", "Fastify"]
+  databases:
+    simple: ["SQLite"]
+    larger_or_concurrent: ["PostgreSQL"]
+    note: "Choose based on persistence, concurrency, recovery and operating model."
+  containers:
+    preferred: ["Podman", "rootless OCI"]
+    compatible: ["Docker-compatible images"]
+  operations:
+    familiar: ["Ubuntu", "systemd", "Quadlet", "Ansible"]
+  test:
+    familiar: ["unit tests", "integration tests", "Playwright"]
+  vcs:
+    familiar: ["Git", "GitHub", "gh"]
+  other_familiar:
+    - "tsx"
+    - "esbuild"
+    - "Phaser"
+    - "LiteLLM"
+    - "OpenWebUI"
+    - "nginx"
+    - "Apache"
+    - "Fabric"
+    - "Java"
+  optional_later: ["Kubernetes"]
+exception_questions:
+  - "What material capability does the alternative provide?"
+  - "What approved or familiar option was considered?"
+  - "What maintenance and operational costs change?"
+  - "How could the risks be checked?"
+  - "Who needs to accept the divergence?"
+mvp_exclusions:
+  - "Live deployment credentials"
+  - "Automatic infrastructure mutation"
+  - "GhostSentry3 integration"
+  - "Enterprise policy enforcement"

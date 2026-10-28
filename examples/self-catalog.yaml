@@ -1,0 +1,26 @@
+# Illustrative record; not an observed deployment or production assertion.
+application:
+  id: application-observatory
+  name: Application Observatory
+  purpose: "Make software lifecycle status, evidence and decisions mutually intelligible."
+  stewardship: "Product Sponsor / repository owner"
+  lifecycle: "concept / preparation"
+environments:
+  development:
+    reported_version: null
+    status: unknown
+    provenance: "self-catalog illustration"
+  test:
+    reported_version: null
+    status: unknown
+    provenance: "not yet observed"
+  production:
+    reported_version: null
+    status: unknown
+    provenance: "not yet observed"
+next_gate:
+  type: dev_feasibility_review
+  actor: Codex
+  standing: advisory
+  outcome: pending
+  note: "Planning-only gate before an implementation authorization."
