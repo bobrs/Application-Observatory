@@ -3,8 +3,8 @@ import { once } from 'node:events';
 
 // Used only by developer tests/demo, always with a disposable data directory.
 export async function startLocalServer(directory, options = {}) {
-  const child = spawn(process.execPath, ['dist/server.js', ...(options.exercise ? ['--exercise'] : [])], {
-    env: { ...process.env, AO_DATA_DIR: directory, AO_PORT: '0', AO_EXERCISE_DIR: options.resume },
+  const child = spawn(process.execPath, ['dist/server.js', ...(options.reference ? ['--reference'] : options.exercise ? ['--exercise'] : [])], {
+    env: { ...process.env, AO_DATA_DIR: directory, AO_PORT: '0', AO_EXERCISE_DIR: options.resume, AO_REFERENCE_DIR: options.resume },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   const exited = once(child, 'exit');

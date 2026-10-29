@@ -7,6 +7,9 @@ import { startTarget, readTarget, type Target } from './adapter.js';
 import { openWorkspace, regularFile } from './workspace.js';
 import { candidates, candidateById, digest, environmentById, environments, faults, lifetime, type Decision, type Event, type Fault, type Observation, type Plan, type Receipt } from './model.js';
 
+import { referenceCandidates, referenceCandidate, referenceDestinations, referenceDestination, referenceFaults } from '../reference/catalog.js';
+import { retainPackages, startReferenceTarget, readReference } from '../reference/target.js';
+
 interface ObservationRow { data: string; after_operation_id: string | null }
 interface Attempt { request_id: string; operation_id: string; decision_seq: number; dispatched_at: string }
 
@@ -18,7 +21,20 @@ export class Exercise {
     private readonly db: Database.Database,
     readonly targets: Map<string, Target>,
     private readonly clock: () => string,
+    readonly reference = false,
   ) {}
+  get candidates() { return this.reference ? referenceCandidates : candidates; }
+  get environments() { return this.reference ? referenceDestinations : environments; }
+  candidate(id: string) { return this.reference ? referenceCandidate(id) : candidateById(id); }
+  environment(id: string) { return this.reference ? referenceDestination(id) : environmentById(id); }
+  get faults() { return this.reference ? referenceFaults : faults; }
+  observationCurrent(observation: Observation | null, environmentId: string) {
+    const target = this.targets.get(environmentId)!;
+    if (!observation || observation.outcome !== 'observed') return false;
+    const age = Date.parse(this.clock()) - Date.parse(observation.recordedAt);
+    return age >= 0 && age <= lifetime && observation.bootId === target.bootId && observation.instanceId === target.instanceId
+      && (!this.reference || (target.child.exitCode === null && target.child.signalCode === null && target.child.connected));
+  }
   private event(id: string, kind: string, source: string, data: object) {
     this.db.prepare('INSERT INTO exercise_events (request_id, kind, recorded_at, source, data) VALUES (?, ?, ?, ?, ?)')
       .run(id, kind, this.clock(), source, JSON.stringify(data));
@@ -45,6 +61,9 @@ export class Exercise {
     const rows = this.db.prepare('SELECT data FROM exercise_observations WHERE environment_id = ? ORDER BY seq DESC').all(environmentId) as ObservationRow[];
     return rows.map((row) => JSON.parse(row.data) as Observation).find((item) => !knownOnly || item.outcome === 'observed') ?? null;
   }
+  observations(environmentId: string): Observation[] {
+    return (this.db.prepare('SELECT data FROM exercise_observations WHERE environment_id = ? ORDER BY seq DESC').all(environmentId) as ObservationRow[]).map((row) => JSON.parse(row.data) as Observation);
+  }
   readBack(id: string): Observation | null {
     const attempt = this.attempt(id);
     if (!attempt) return null;
@@ -53,9 +72,9 @@ export class Exercise {
     return row ? JSON.parse(row.data) as Observation : null;
   }
   async observe(environmentId: string, requestId?: string, preflight = false): Promise<Observation> {
-    environmentById(environmentId);
+    this.environment(environmentId);
     if (requestId && this.plan(requestId).environmentId !== environmentId) throw new Error('Observation destination does not match this request.');
-    const observation = await readTarget(this.targets.get(environmentId)!, this.clock);
+    const observation = this.reference ? await readReference(this.targets.get(environmentId)!, environmentId, this.clock) : await readTarget(this.targets.get(environmentId)!, this.clock);
     const afterOperation = requestId && !preflight ? this.attempt(requestId)?.operation_id ?? null : null;
     this.db.prepare('INSERT INTO exercise_observations (environment_id, request_id, after_operation_id, recorded_at, data) VALUES (?, ?, ?, ?, ?)')
       .run(environmentId, requestId ?? null, afterOperation, observation.recordedAt, JSON.stringify(observation));
@@ -63,12 +82,12 @@ export class Exercise {
     return observation;
   }
   createRequest(candidateId: string, environmentId: string, fault: string): Plan {
-    const candidate = candidateById(candidateId);
-    environmentById(environmentId);
-    if (!faults.includes(fault as Fault)) throw new Error('Unsupported fixture demonstration condition.');
+    const candidate = this.candidate(candidateId);
+    this.environment(environmentId);
+    if (!(this.faults as readonly string[]).includes(fault)) throw new Error('Unsupported fixture demonstration condition.');
     const target = this.targets.get(environmentId)!;
     const content = {
-      action: 'activate-bundled-sample' as const, criteriaVersion: 'local-fixture-v1' as const,
+      action: this.reference ? 'activate-reference-artifact' as const : 'activate-bundled-sample' as const, criteriaVersion: this.reference ? 'local-reference-v1' as const : 'local-fixture-v1' as const,
       id: randomUUID(), createdAt: this.clock(), candidateId, candidateDigest: candidate.digest,
       environmentId, instanceId: target.instanceId, bootId: target.bootId,
       expected: this.latestObservation(environmentId), fault: fault as Fault,
@@ -85,14 +104,14 @@ export class Exercise {
     const expected = plan.expected;
     const target = this.targets.get(plan.environmentId)!;
     const age = Date.parse(this.clock()) - Date.parse(plan.createdAt);
-    if (plan.action !== 'activate-bundled-sample' || plan.criteriaVersion !== 'local-fixture-v1') reasons.push('Action or readiness criteria do not match this fixed fixture.');
+    if (plan.action !== (this.reference ? 'activate-reference-artifact' : 'activate-bundled-sample') || plan.criteriaVersion !== (this.reference ? 'local-reference-v1' : 'local-fixture-v1')) reasons.push('Action or readiness criteria do not match this fixed fixture.');
     if (age < 0 || age > lifetime) reasons.push('Request is expired or has an invalid time. Observe and create a new request.');
-    if (candidateById(plan.candidateId).digest !== plan.candidateDigest) reasons.push('Bundled payload digest no longer matches.');
+    if (this.candidate(plan.candidateId).digest !== plan.candidateDigest) reasons.push(this.reference ? 'Accepted package identity no longer matches.' : 'Bundled payload digest no longer matches.');
     if (!expected || expected.outcome !== 'observed') reasons.push('No usable observation was bound to this request. Observe the destination and create a new request.');
     else {
       const observationAge = Date.parse(this.clock()) - Date.parse(expected.recordedAt);
       if (observationAge < 0 || observationAge > lifetime) reasons.push('Bound observation is older than five minutes or has an invalid time.');
-      if (!candidates.some((candidate) => candidate.digest === expected.digest)) reasons.push('Observed bytes do not match a bundled sample.');
+      if (!this.candidates.some((candidate) => candidate.digest === expected.digest)) reasons.push(this.reference ? 'Observed identity does not match an accepted reference artifact.' : 'Observed bytes do not match a bundled sample.');
       if (expected.instanceId !== plan.instanceId || expected.bootId !== plan.bootId) reasons.push('Bound observation belongs to a different target incarnation.');
     }
     if (target.instanceId !== plan.instanceId || target.bootId !== plan.bootId) reasons.push('Target restarted or changed instance. Old authorizations cannot be reused.');
@@ -162,8 +181,8 @@ export class Exercise {
   }
 }
 
-export async function createExercise(resume?: string, clock = () => new Date().toISOString()): Promise<Exercise> {
-  const workspace = openWorkspace(resume);
+export async function createExercise(resume?: string, clock = () => new Date().toISOString(), reference = false): Promise<Exercise> {
+  const workspace = openWorkspace(resume, reference);
   const targets = new Map<string, Target>();
   let db: Database.Database | undefined;
   try {
@@ -171,8 +190,13 @@ export async function createExercise(resume?: string, clock = () => new Date().t
     const catalog = openCatalog(workspace.directory);
     catalog.close();
     db = new Database(join(workspace.directory, 'catalog.sqlite'));
-    for (const environment of environments) targets.set(environment.id, await startTarget(workspace.directory, environment.id));
-    const exercise = new Exercise(workspace, db, targets, clock);
+    if (reference) retainPackages(workspace.directory);
+    for (const environment of (reference ? referenceDestinations : environments)) targets.set(environment.id, reference ? await startReferenceTarget(workspace.directory, environment.id) : await startTarget(workspace.directory, environment.id));
+    const exercise = new Exercise(workspace, db, targets, clock, reference);
+    if (reference) for (const [destinationId, target] of targets) {
+      db.prepare('INSERT INTO exercise_events (request_id, kind, recorded_at, source, data) VALUES (?, ?, ?, ?, ?)')
+        .run(`runtime:${destinationId}`, 'runtime started', clock(), 'Fixed local launcher startup — not an HTTP observation', JSON.stringify({ destinationId, instanceId: target.instanceId, bootId: target.bootId, disposableDemo: true, purpose: 'Fresh runtime bootstrap; no previous request replayed or version observation inferred' }));
+    }
     exercise.recoverUncertainAttempts();
     return exercise;
   } catch (error) {

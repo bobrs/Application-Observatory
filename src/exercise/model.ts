@@ -10,16 +10,17 @@ export const environments = [
   { id: 'test-sandbox', name: 'Test Sandbox', stage: 'Test' },
 ] as const;
 export const faults = ['normal', 'refuse', 'lost-receipt'] as const;
-export type Fault = typeof faults[number];
+export type Fault = typeof faults[number] | 'launch-failure';
 export const lifetime = 5 * 60 * 1000;
 export interface State { candidateId: string; digest: string; generation: number; operationId: string | null }
 export interface Identity { instanceId: string; bootId: string }
 export interface Observation extends Identity {
+  version?: string; responseHash?: string;
   outcome: 'observed' | 'unknown'; digest: string | null; generation: number | null;
   observedAt: string | null; recordedAt: string; source: string; detail: string; operationId: string | null;
 }
 export interface Plan {
-  action: 'activate-bundled-sample'; criteriaVersion: 'local-fixture-v1';
+  action: 'activate-bundled-sample' | 'activate-reference-artifact'; criteriaVersion: 'local-fixture-v1' | 'local-reference-v1';
   id: string; createdAt: string; candidateId: string; candidateDigest: string;
   environmentId: string; instanceId: string; bootId: string;
   expected: Observation | null; fault: Fault; hash: string;

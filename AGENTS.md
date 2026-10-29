@@ -18,7 +18,11 @@ Act as the **Dev gate**. Review feasibility, propose the smallest adequate imple
 
 The preferred-stack profile is advisory. Challenge it when justified. Focus on the smallest useful self-observing portal, not a full enterprise platform.
 
-## If later authorized to implement
+## Current bounded build
+
+AO-INC-003B is directly Sponsor-authorized in the Dev session, as transcribed in [Issue #7 continuity](https://github.com/bobrs/Application-Observatory/issues/7#issuecomment-6485726662) and [DECISIONS](docs/DECISIONS.md). Only the three accepted reference packages may execute, after trusted external-pin verification, on three owned disposable loopback destinations. Production is a **disposable demonstration label only**. Preserve the previous data-fixture semantics and the real self-entry's unknowns. Commit/push a feature PR; stop for PM review and separate Sponsor merge authorization. No general deployment adapters, arbitrary artifact intake, external services, CI or unrelated projects. The specifically authorized reference repository is the only second repository in this increment; GhostSentry3 remains excluded.
+
+## If authorized to implement
 
 - Distinguish source claims, observed state, test evidence, recommendations, authorizations, execution, and health.
 - Bind decisions to exact candidates and destinations; never infer deployment from approval.

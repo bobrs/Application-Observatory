@@ -51,3 +51,5 @@ A future application may adopt many of those; their possibility should not burde
 ## Scope check
 
 Does the increment make application state, provenance, recent history, or the next human decision more intelligible? If no, record it as a future possibility.
+
+**AO-INC-003B bounded addition:** the Sponsor separately authorized the fixed local bridge in [Issue #7 continuity](https://github.com/bobrs/Application-Observatory/issues/7#issuecomment-6485726662), as transcribed in [DECISIONS](DECISIONS.md). Only three accepted independently packaged reference artifacts, verified against external pins before execution, and three owned loopback destinations are supported. Production is explicitly **DISPOSABLE DEMO ONLY**. Exact bounded decision, dispatch/receipt and fresh HTTP version observation remain distinct. Existing data-fixture history is not reinterpreted as package identity; the normal real self-catalog remains read-only/unknown. No general deployment framework, real Production, external integration or CI is authorized. Step B's PR must stop for PM review and separate Sponsor merge authorization.
