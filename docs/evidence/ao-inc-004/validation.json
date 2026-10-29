@@ -1,0 +1,23 @@
+{
+  "sourceCommit": "37cd0b26d489168e0a9d3364f49ba09bf181650e",
+  "sourceDirty": false,
+  "platform": "macOS arm64",
+  "node": "24.22.1",
+  "npm": "11.13.0",
+  "browser": "Chromium 156.0.8078.4",
+  "commands": {
+    "npm ci --no-fund": "PASS: 57 packages installed / 58 audited; 0 known package vulnerabilities reported, not a security assessment",
+    "npm run verify": "PASS: strict TypeScript/build, 32 native tests, no failures or skips",
+    "npm run demo": "PASS: executive portfolio and honest self detail, desktop/mobile",
+    "npm run demo:exercise": "PASS: original data-fixture flow",
+    "npm run demo:reference": "PASS: original real upgrade/retained rollback, failure/stale/uncertain outcomes",
+    "npm run demo:portfolio": "PASS: new executive-to-operational journey, consumed request, visible unknown execution, synthetic variable-count layouts and large portfolio"
+  },
+  "preserved": "Catalog/seeds/schema, accepted packages, fixed target registry, launcher/controller/criteria, config and dependencies unchanged apart from package version metadata",
+  "limitations": [
+    "Dev-run macOS/Chromium only; no independent Test, health or organizational standing",
+    "Only original three fixed local reference apps execute; extra layout sizes are synthetic test-server fixtures, not new registrations or runtime observations",
+    "Default mode has no live reference observations; current state is not synthesized from known metadata",
+    "Editable registration/directives, large-portfolio search/pagination, new targets, IAM and integrations deferred; no CI/external deployment"
+  ]
+}

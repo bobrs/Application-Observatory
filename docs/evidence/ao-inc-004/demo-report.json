@@ -1,0 +1,10 @@
+{
+  "sourceCommit": "37cd0b26d489168e0a9d3364f49ba09bf181650e",
+  "sourceDirty": false,
+  "capturedAt": "2026-10-29T03:46:16.792Z",
+  "node": "v24.22.1",
+  "platform": "darwin arm64",
+  "browser": "Chromium 156.0.8078.4",
+  "result": "PASS: executive portfolio with two distinct applications, self detail with zero concrete destinations and unknown state, desktop/mobile navigation without horizontal overflow, no browser/HTTP errors or external requests",
+  "data": "Disposable local fixture; removed after capture. Seed timestamp is record creation, not observation time."
+}
