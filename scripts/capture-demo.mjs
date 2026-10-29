@@ -27,18 +27,18 @@ try {
     return route.continue();
   });
   await page.goto(server.address);
-  assert.equal(await page.locator('.unknown').count(), 3);
-  assert.equal(await page.getByText('1 application', { exact: true }).count(), 1);
+  assert.equal(await page.locator('[data-application]').count(), 2);
+  assert.equal(await page.getByText('2 applications', { exact: true }).count(), 1);
   await page.screenshot({ path: join(output, 'catalog-desktop.png'), fullPage: true });
-  await page.getByRole('link', { name: 'View application' }).click();
+  await page.locator('[data-application=application-observatory]').getByRole('link', { name: 'View application' }).click();
   assert.match(await page.title(), /Application Observatory/);
-  assert.equal(await page.locator('.unknown').count(), 3);
-  assert.equal(await page.getByText('Recorded next decision', { exact: true }).count(), 1);
+  assert.equal(await page.getByRole('heading', { name: 'No concrete destinations connected', exact: true }).count(), 1);
+  assert.equal(await page.getByText('Application definition and historical metadata', { exact: true }).count(), 1);
   await page.screenshot({ path: join(output, 'detail-desktop.png'), fullPage: true });
   await page.setViewportSize({ width: 390, height: 844 });
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
   await page.screenshot({ path: join(output, 'detail-mobile.png'), fullPage: true });
-  await page.getByRole('link', { name: 'Application catalog', exact: true }).click();
+  await page.getByRole('link', { name: 'Application portfolio', exact: true }).click();
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
   await page.screenshot({ path: join(output, 'catalog-mobile.png'), fullPage: true });
   assert.deepEqual(errors, []);
@@ -50,7 +50,7 @@ try {
     node: process.version,
     platform: `${process.platform} ${process.arch}`,
     browser: `Chromium ${browser.version()}`,
-    result: 'PASS: desktop list/detail, mobile list/detail without horizontal overflow, navigation, three unknown environments, next decision, no page/console/HTTP errors or external requests',
+    result: 'PASS: executive portfolio with two distinct applications, self detail with zero concrete destinations and unknown state, desktop/mobile navigation without horizontal overflow, no browser/HTTP errors or external requests',
     data: 'Disposable local fixture; removed after capture. Seed timestamp is record creation, not observation time.',
   };
   writeFileSync(join(output, 'demo.json'), JSON.stringify(report, null, 2) + '\n');
