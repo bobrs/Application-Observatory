@@ -30,7 +30,31 @@ SQLite is stored **outside the checkout** as `catalog.sqlite` in:
 
 Optionally set `AO_DATA_DIR` to an **absolute, local, unsynchronized directory**. The app rejects paths within the repository (including symlink aliases) and common synchronized folders. Custom sync locations cannot be identified reliably; choose the directory accordingly. Do not put mutable SQLite data on Google Drive, OneDrive, Dropbox or a shared network filesystem.
 
-On startup, migration **001** creates the catalog table transactionally and records SQLite `user_version=1`. A newer schema causes startup to fail rather than downgrade it. The self-entry is inserted only when absent; restarting neither duplicates it nor overwrites its metadata or original timestamp. There are no stored operational observations in this increment, so all environment states remain explicitly unknown.
+On startup, migration **001** creates the catalog table and migration **002** adds the exercise ledger, transactionally advancing SQLite to `user_version=2`. Existing schema-1 metadata and original timestamps are preserved. A newer schema causes startup to fail rather than downgrade it. The self-entry is inserted only when absent; restarting neither duplicates it nor overwrites its metadata. No operational observations about the real Observatory are inferred; its environment states remain explicitly unknown.
+
+If you need a rollback path to AO-INC-001, back up its stopped schema-1 database before the first run of this version. The older binary will refuse the upgraded schema-2 database; use the matching source version or your original backup.
+
+## Run the disposable release exercise (AO-INC-002)
+
+With the pinned runtime selected and build complete:
+
+```sh
+npm run exercise
+```
+
+Open the printed loopback URL and choose **Open local release exercise**. This opt-in mode creates a **separate generated local workspace**, including its own catalog/ledger and two trusted Node fixture processes. It never uses your normal operator data. **Dev Sandbox — Development** and **Test Sandbox — Test** are concrete destinations with distinct stable instance IDs; Production cannot be selected. The two bundled sample versions are data payloads, not Observatory builds or executable candidate code.
+
+1. Observe each destination to obtain a sourced snapshot of its served bytes.
+2. Select a sample version and concrete destination, then review the exact digest, instance, boot, expected generation and readiness. Observations and requests expire for action purposes after five minutes.
+3. Record a recommendation, decline/deferral, or **bounded demo authorization**, with a self-declared actor/role and rationale. Recommendations cannot enable activation. Only fixed stated prerequisites are evaluated; rationale is not an executable condition.
+4. Explicitly apply the exact sample. The controller rechecks conditions, records dispatch intent before sending, and the target checks the expected generation. A consumed request cannot dispatch twice.
+5. Separately **Observe target**. A receipt does not update observations. A fresh loopback reader hashes served bytes; it is not independent organizational Test acceptance or a health attestation. Health remains not evaluated.
+
+The optional **Demonstration faults** are explicitly injected: refusal before activation, or loss of the receipt after the fixture really changes. A stale request can be demonstrated with two review tabs: approve both against one generation, apply one, then attempt the other. A missing receipt, crash or unreadable target is **unknown**, never automatic success or automatic retry. Earlier observations remain historical; mismatching evidence is preserved in the request timeline.
+
+Use Ctrl-C and wait for exit to stop the controller and its two owned targets. The printed workspace is retained for review. To resume that **previously generated marked workspace**, set `AO_EXERCISE_DIR` to its absolute path before `npm run exercise`. Arbitrary/unmarked directories are refused; one live controller is permitted per workspace. Stable destination identities persist, but each target gets a fresh boot identity, invalidating old unused authorizations. Previously dispatched requests without receipts recover as unknown and are never automatically resent. Temporary directories may eventually be removed by the OS; this is not durable production history. After recording any needed evidence and stopping all processes, remove only the exact generated workspace to clean up the exercise.
+
+Only fixed bundled payloads and local targets are supported. There are no commands, user-supplied target paths/endpoints, external APIs, Production actions, IAM or general deployment adapters. POST forms require same-origin checks and a CSRF token. The exercise's same-origin referrer policy allows native forms to carry a checkable Origin without sending referrers to external sites; normal catalog pages retain their original policy. These are local safeguards, not authenticated organizational authority or an isolation boundary against a malicious same-user process.
 
 For a basic backup, stop the app and wait for exit, then copy `catalog.sqlite` to a separate local backup location. To check a restore, copy that backup into a new local data directory and start with `AO_DATA_DIR` pointing to it. Confirm the self-entry and original timestamp before using the restored copy. Do not copy a live database, overwrite your original data, or infer recoverability from a successful start. There is no automated backup integration.
 
@@ -48,6 +72,8 @@ npm run demo
 
 This installs a project-local browser, launches a disposable loopback instance, checks navigation and desktop/mobile layouts, and writes four screenshots plus `demo.json` to ignored `test-results/demo/`. It closes the browser/server and removes its data fixture. The report records the source commit and dirty state, environment, browser version and observed results. [Committed developer evidence and screenshots](docs/evidence/ao-inc-001/README.md) identify their source revision; the increment PR records final-head validation. Developer evidence is not independent Test acceptance; the native SQLite binding still needs checking on platforms other than those actually tested.
 
+`npm run demo:exercise` captures the distinct-stage exercise, success, decline/refusal, injected failure, stale request, missing receipt and unreadable observation using disposable targets. Screenshots/report go to ignored `test-results/exercise/`. `npm run verify` also exercises a real controller SIGKILL after target mutation, resume/reconciliation, duplicate submission, migration and scope checks. No operator data is used. [AO-INC-002 evidence and screenshots](docs/evidence/ao-inc-002/README.md) identify their clean source revision; the PR records final-head checks.
+
 ## Prime directive: mutual intelligibility
 
 Every consequential assertion about an application's state, purpose, readiness, or future should be intelligible, attributable, grounded, and open to correction.
@@ -56,7 +82,7 @@ Manual entries, APIs, scrapes, CI results, and AI interpretations are welcome wh
 
 ## First development target: v0.1
 
-The full target spans three separately authorized increments. AO-INC-001 implements the read-only self-catalog subset; the remaining features below are future scope.
+The original full target spans separately authorized increments. AO-INC-001 implements the read-only self-catalog; AO-INC-002 adds an expressly authorized fixture-only control exercise. The broader features below are not automatically authorized by that exception.
 
 - **Application list:** name, purpose, owner or steward, high-level Development/Test/Production state, and next meaningful decision.
 - **Application detail:** one or more Development candidates, recorded versions in Test and Production, notes, history, and explicit unknowns.
@@ -72,7 +98,7 @@ The full target spans three separately authorized increments. AO-INC-001 impleme
 - **Product Sponsor / gopher — repository owner:** final product decisions, bounded work authorization, operational action.
 - **Test — separately designated:** testing and intake acceptance; Dev or PM review does not automatically count as independent Test sign-off.
 
-Current implementation review is [AO-INC-001 / Issue #3](https://github.com/bobrs/Application-Observatory/issues/3). [AO-GATE-001 / Issue #1](https://github.com/bobrs/Application-Observatory/issues/1) records the earlier continuity deliberation. Read [DECISIONS](docs/DECISIONS.md) for provenance and bounded Sponsor instructions, and [GATES_AND_ROLES](docs/GATES_AND_ROLES.md) for the Issue/branch/PR handoff convention. The initial [CODEX_INTAKE](docs/CODEX_INTAKE.md) remains available as provenance.
+Current implementation review is [AO-INC-002 / Issue #5](https://github.com/bobrs/Application-Observatory/issues/5). [AO-INC-001 / Issue #3](https://github.com/bobrs/Application-Observatory/issues/3) records the accepted self-catalog, and [AO-GATE-001 / Issue #1](https://github.com/bobrs/Application-Observatory/issues/1) retains the continuity deliberation. Read [DECISIONS](docs/DECISIONS.md) for provenance and bounded Sponsor instructions, and [GATES_AND_ROLES](docs/GATES_AND_ROLES.md) for the handoff convention. The initial [CODEX_INTAKE](docs/CODEX_INTAKE.md) remains available as provenance.
 
 ## Explore the documents
 
@@ -95,4 +121,6 @@ This repository includes the [CC0 1.0 Universal](LICENSE) dedication so others c
 
 The documentation continuity increment was accepted and [PR #2 merged](https://github.com/bobrs/Application-Observatory/pull/2); [Issue #1 records the actual outcome](https://github.com/bobrs/Application-Observatory/issues/1#issuecomment-6481151297).
 
-The Product Sponsor directly authorized **AO-INC-001: running local self-catalog** in the Dev session, within Issue #3's scope; [DECISIONS](docs/DECISIONS.md) records this as a Dev transcription. This branch supplies that local read-only increment for PM review. Separate Sponsor authorization is required to merge. No independent Test acceptance, Production authorization, deployment or runtime health is established. Increments 2 and 3 remain outside scope.
+[PR #4](https://github.com/bobrs/Application-Observatory/pull/4) merged the self-catalog as `f19a0ac2758a4d59709c06fbf5d75d9611b46545`; [Issue #3](https://github.com/bobrs/Application-Observatory/issues/3#issuecomment-6482136137) records Sponsor-reported successful local use/visual acceptance, separate merge authorization and actual completion. This is not independent Test acceptance.
+
+The Product Sponsor directly authorized **AO-INC-002**, limited to the local exercise in Issue #5 and its PM refinement to Development/Test destinations; [DECISIONS](docs/DECISIONS.md) records this as Dev's attributed transcription. This branch is submitted for PM review and separate Sponsor merge authorization. No real deployment, Production authorization, independent Test acceptance or health is established; the rest of the original Increments 2–3 remains outside scope.

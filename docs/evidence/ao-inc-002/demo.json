@@ -1,0 +1,17 @@
+{
+  "sourceCommit": "45f9dbb5d5ca3a5d5f24bd84320acce118808b98",
+  "sourceDirty": false,
+  "capturedAt": "2026-10-28T22:58:52.273Z",
+  "node": "v24.22.1",
+  "platform": "darwin arm64",
+  "browser": "Chromium 156.0.8078.4",
+  "scenarios": [
+    "PASS: same immutable sample activated and observed first in Development, then selected for Test; stage is distinct from instance",
+    "PASS: authorized Test activation, no observation inferred from receipt, separate HTTP read-back matches, desktop/mobile no overflow",
+    "PASS: declined request has no dispatch and backend refusal is recorded",
+    "PASS: explicitly injected pre-activation failure has a separate failed adapter receipt",
+    "PASS: another request changes generation; stale authorized request cannot dispatch",
+    "PASS: lost receipt after real local change remains unknown; read-back proves bytes separately; fixture outage preserves observation uncertainty"
+  ],
+  "limits": "Same-host trusted fixture/data-only payloads; faults explicitly injected. Not a real deployment, health attestation or independent Test acceptance."
+}

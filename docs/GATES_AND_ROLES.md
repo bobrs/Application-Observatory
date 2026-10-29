@@ -56,3 +56,5 @@ Do not overwrite contradicted history; record the correction and preserve the ea
 ## MVP boundary
 
 For now, the portal records statements and review decisions. It does **not** enforce standing, hold credentials, move artifacts, or update Production. A button that records a declared approval must not imply that a deployment happened.
+
+**AO-INC-002 bounded exception:** the Sponsor authorized an opt-in disposable local release exercise in [Issue #5](https://github.com/bobrs/Application-Observatory/issues/5), as transcribed in [DECISIONS](DECISIONS.md). Only its two bundled data payloads may be activated on its fixed Development/Test fixture instances. A one-shot self-declared demo authorization is separate from dispatch, adapter receipt and fresh HTTP observation. It establishes neither organizational standing, real deployment, Test acceptance nor health. Normal self-catalog operation remains read-only. This exception does not authorize a general deployment framework or the remaining earlier increments.

@@ -46,6 +46,8 @@ Idea/proposal inception workflows, provisioning, automated promotion, enterprise
 
 A future application may adopt many of those; their possibility should not burden the first implementation.
 
+**Later bounded scope decision — AO-INC-002:** [Issue #5](https://github.com/bobrs/Application-Observatory/issues/5) and the Sponsor's direct Dev-session instruction authorize only a disposable local version-to-environment exercise: two bundled data samples, concrete Development and Test destinations, readiness, bounded demo decisions, fixed activation and separate HTTP read-back. This explicitly revises the original record-only boundary for the fixture, while preserving the real self-entry's unknowns and all real-deployment exclusions. See [DECISIONS](DECISIONS.md) for provenance; it is not approval of the full future feature list.
+
 ## Scope check
 
 Does the increment make application state, provenance, recent history, or the next human decision more intelligible? If no, record it as a future possibility.
