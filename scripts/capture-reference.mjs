@@ -55,7 +55,7 @@ try {
   await capture('three-destinations-desktop');
   const firstCard = page.locator('[data-destination=dev-reference]');
   await firstCard.getByText('Evidence', { exact: true }).click();
-  await firstCard.getByText('Latest observation', { exact: true }).click();
+
   assert.match(await firstCard.innerText(), /sha256:7410f8f433f8d7668000a290b573df8873334ca1f4aadc4622c48b76610b199f/);
   await capture('destination-evidence');
   await firstCard.getByText('Evidence', { exact: true }).click();

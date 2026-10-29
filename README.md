@@ -6,7 +6,7 @@ Application Observatory helps small and mid-market teams understand where softwa
 
 This is a **public, CC0 collaborative experiment**, primarily intended as a useful surface for teams rather than a commercial product. It starts by registering **itself** as its first application.
 
-## Run the local self-catalog (AO-INC-001)
+## Run the local portfolio (AO-INC-004)
 
 Requires **Node.js 24.22.1 or a newer supported 24.x patch** and npm (`.node-version` pins the tested runtime). From this checkout:
 
@@ -16,9 +16,11 @@ npm run verify
 npm start
 ```
 
-Open **http://127.0.0.1:4310**. Follow **View application** for the self-entry's detail. Both pages show Development, Test and Production as unknown, with no recorded versions or observation sources. Project metadata is explicitly seeded, with source references and its first-recorded timestamp; that timestamp is not a runtime observation. The recorded next step is PM review followed by separate Sponsor merge authorization, labeled as a snapshot rather than live workflow state.
+Open **http://127.0.0.1:4310**. The executive portfolio lists **Application Observatory** and **Hello Observatory** as separate applications, with brief version/location, uncertainty, stewardship and next-role/action summaries. No operational controls appear on the landing page. Follow **View application** for detail.
 
-The server always binds to `127.0.0.1`, accepts only local Host names, and offers GET/HEAD pages only. There are no editing, candidate or approval controls, no client JavaScript, and no automatic external requests. Use **Ctrl-C** to stop; restart with `npm start`. An occupied port causes startup to fail instead of starting a second service; use `AO_PORT=4311 npm start` if needed. `AO_PORT=0` selects a free loopback port printed at startup.
+The Observatory keeps its original seeded project metadata, source revision and first-recorded timestamp; its own actual deployed state remains unknown, with zero connected concrete destinations. The original AO-INC-001 next-review text is preserved under **Application definition and historical metadata**, never used as a current decision. Hello is a known bundled reference definition with immutable accepted-source provenance, not a new database row or an invented registration/runtime timestamp. Normal mode starts no reference process and observes none. Registration/recognition never implies health, operational approval or Production readiness.
+
+The server always binds to `127.0.0.1`, accepts only local Host names, and offers GET/HEAD pages only. Normal mode has no editing, approval or executable release controls, no client JavaScript and no automatic external requests. The inactive Hello detail explains the opt-in reference mode. Use **Ctrl-C** to stop; restart with `npm start`. An occupied port causes startup to fail instead of starting a second service; use `AO_PORT=4311 npm start` if needed. `AO_PORT=0` selects a free loopback port printed at startup.
 
 ### Local data, migration and recovery
 
@@ -42,7 +44,7 @@ With the pinned runtime selected and build complete:
 npm run exercise
 ```
 
-Open the printed loopback URL and choose **Open local release exercise**. This opt-in mode creates a **separate generated local workspace**, including its own catalog/ledger and two trusted Node fixture processes. It never uses your normal operator data. **Dev Sandbox — Development** and **Test Sandbox — Test** are concrete destinations with distinct stable instance IDs; Production cannot be selected. The two bundled sample versions are data payloads, not Observatory builds or executable candidate code.
+Open the printed loopback URL, drill into **Application Observatory**, then expand **Earlier data-only demonstration** and choose **Open local release exercise**. This opt-in mode creates a **separate generated local workspace**, including its own catalog/ledger and two trusted Node fixture processes. It never uses your normal operator data. **Dev Sandbox — Development** and **Test Sandbox — Test** are concrete destinations with distinct stable instance IDs; Production cannot be selected. The two bundled sample versions are data payloads, not Observatory builds or executable candidate code.
 
 1. Observe each destination to obtain a sourced snapshot of its served bytes.
 2. Select a sample version and concrete destination, then review the exact digest, instance, boot, expected generation and readiness. Observations and requests expire for action purposes after five minutes.
@@ -76,7 +78,7 @@ This installs a project-local browser, launches a disposable loopback instance, 
 
 ## Run three real reference destinations (AO-INC-003B)
 
-Step A is accepted and [merged in its separate repository](https://github.com/bobrs/observatory-hello-reference/pull/1). This branch implements the separately authorized Step B, submitted for PM review and separate Sponsor merge authorization.
+Step A is accepted and [merged in its separate repository](https://github.com/bobrs/observatory-hello-reference/pull/1). [Step B / PR #8](https://github.com/bobrs/Application-Observatory/pull/8) merged at `dcb893848b28caecf5dd0c3535a9f4872c4ac029`. AO-INC-004 changes presentation while preserving those accepted executable boundaries.
 
 ```sh
 npm ci
@@ -84,7 +86,7 @@ npm run verify
 AO_PORT=0 npm run reference
 ```
 
-Open the printed URL, then **Open three reference destinations**. The opt-in mode uses the same Node/TypeScript/Fastify/SQLite stack and native HTML forms. No new dependencies, migration, hosting tools or browser JavaScript are required. The normal self-catalog remains read-only and its real operational state stays unknown. The previous `npm run exercise` data-fixture mode and history keep their original meaning.
+Open the printed URL, then **Hello Observatory → View application**. The opt-in mode uses the same Node/TypeScript/Fastify/SQLite stack and native HTML forms. No new dependencies, migration, hosting tools or browser JavaScript are required. The portfolio remains free of operational forms and the real Observatory self-entry remains read-only/unknown. The previous `npm run exercise` data-fixture mode and history keep their original meaning. The legacy `/reference` entry point and request/POST routes remain compatible.
 
 The controller creates a separate generated local workspace, retains verified copies of the [three accepted independent app packages](fixtures/reference/README.md), and starts three owned processes with distinct destination/instance IDs, runtime directories and loopback endpoints:
 
@@ -99,13 +101,23 @@ The controller creates a separate generated local workspace, retains verified co
 3. The receipt is execution evidence only. Click **Observe target** or return and **Refresh observations**. Test now reports 1.2.0; Development and demo-Production remain unchanged.
 4. Select **1.1.0 → Test Reference**, record a fresh decision and explicitly **Rollback to 1.1.0**. It starts the original retained package, never rebuilds an old version label or rewrites history. Refresh and open the actual Test app to check the result.
 
-The three cards prioritize observed version, time/source, short artifact identity and **Open app**. Evidence disclosures retain full digests, separate HTTP response hashes, instance/boot identities, decision/request hashes and timelines. A changing response hash is not the immutable whole-package digest. Freshness is evaluated when rendering; an idle page does not auto-poll. After five minutes or a runtime change, refresh is required. The endpoint is a same-host runtime report validated against the accepted mapping and owned context, not hostile-host attestation, health or independent Test acceptance.
+The Hello detail groups concrete destination instances by stage and prioritizes observed version, time/source, short artifact identity and **Open app**. Only here are Refresh observations and release controls available. The executive portfolio shows a compact stage/version summary, not raw hashes or full provenance panels. Evidence disclosures retain full digests, separate HTTP response hashes, instance/boot identities, decision/request hashes and timelines. A changing response hash is not the immutable whole-package digest. Freshness is evaluated when rendering; an idle page does not auto-poll. After five minutes or a runtime change, refresh is required. The endpoint is a same-host runtime report validated against the accepted mapping and owned context, not hostile-host attestation, health or independent Test acceptance.
 
 Under **Demonstration faults**, refusal leaves the old app intact; startup failure stops the old app and leaves that destination unavailable; withheld receipt really starts the package but records an unknown execution outcome. A later matching observation does not rewrite the unknown receipt. Stale requests, expired decisions and consumed requests cannot dispatch again. A failed refresh makes current state unavailable and labels the last-known version/time historical without erasing the other two observations.
 
 Use Ctrl-C and wait for the controller and all its owned children to exit. The printed workspace is retained as disposable evidence. To explicitly resume that marked reference workspace, set `AO_REFERENCE_DIR` to its exact absolute path before `npm run reference`. One controller may own it. Resume creates fresh boots from each destination's last successfully retained selection (or its initial selection), **not continuous runtime or replay of an old request**. A startup failure therefore needs this explicit stop/resume or a new workspace; there is no automatic recovery/rollback. Earlier authorizations become stale, missing terminal receipts recover as unknown and all old observations remain historical until refreshed. There is no arbitrary endpoint/path/command input, remote control, real Production, registry, adapter platform, CI or external deployment.
 
 `npm run demo:reference` runs the browser walkthrough and writes source-stamped desktop/mobile screenshots and a report into ignored `test-results/reference/`; `npm run demo` and `npm run demo:exercise` check the accepted earlier surfaces. All use disposable data and owned processes. [Committed Step B evidence and screenshots](docs/evidence/ao-inc-003b/README.md) identify the clean implementation source; the PR records the exact final tested head. Only macOS arm64/Chromium is exercised here; no independent Test reviewer is designated.
+
+## Executive-first layout and evidence
+
+[AO-INC-004 design and copy](docs/AO_INC_004_DESIGN.md) records the wireframes, scope/provenance, reversible migration and evidence distinctions from [Issue #9](https://github.com/bobrs/Application-Observatory/issues/9). The Sponsor directly authorized beginning development; this branch awaits PM review and separate Sponsor merge authorization. There is no separate PM design acceptance implied.
+
+The application page shows concrete instances grouped by stage, recent consequential activity, declared decisions with scope/conditions/identity assurance/expiry, and next responsible role. A recorded directive can exist without an executable request. Governance standing does not supply execution credentials. Historical seeded review steps remain disclosed as history. A consumed request clearly requires a new decision for any further change; original criteria/current reuse checks remain available without reading as retrospective execution errors.
+
+The presentation accepts **zero, one or many instances per stage**. `npm run demo:portfolio` checks the executive-to-operator journey, mobile/desktop and clearly labeled synthetic zero/one/three/six-instance and 24-application layouts. These extra shapes exist only in the capture script's separate test server: no new application/target registration, process, endpoint or observation is created. Only the original three accepted reference destinations can execute. Output goes to ignored `test-results/portfolio/` with exact source/dirty-state reports.
+
+No catalog/schema, dependency, launcher/controller, package, IAM, permission or integration changes are needed. Reverting this layout to accepted main restores the earlier UI without a database rollback. Larger-portfolio search/pagination, editable application registration/directives, new destinations and monitoring remain future decisions.
 
 ## Prime directive: mutual intelligibility
 
@@ -131,7 +143,7 @@ The original full target spans separately authorized increments. AO-INC-001 impl
 - **Product Sponsor / gopher — repository owner:** final product decisions, bounded work authorization, operational action.
 - **Test — separately designated:** testing and intake acceptance; Dev or PM review does not automatically count as independent Test sign-off.
 
-Current implementation review is [AO-INC-003 / Issue #7](https://github.com/bobrs/Application-Observatory/issues/7). The accepted earlier fixture gate is [AO-INC-002 / Issue #5](https://github.com/bobrs/Application-Observatory/issues/5). [AO-INC-001 / Issue #3](https://github.com/bobrs/Application-Observatory/issues/3) records the accepted self-catalog, and [AO-GATE-001 / Issue #1](https://github.com/bobrs/Application-Observatory/issues/1) retains the continuity deliberation. Read [DECISIONS](docs/DECISIONS.md) for provenance and bounded Sponsor instructions, and [GATES_AND_ROLES](docs/GATES_AND_ROLES.md) for the handoff convention. The initial [CODEX_INTAKE](docs/CODEX_INTAKE.md) remains available as provenance.
+Current implementation review is [AO-INC-004 / Issue #9](https://github.com/bobrs/Application-Observatory/issues/9). [AO-INC-003 / Issue #7](https://github.com/bobrs/Application-Observatory/issues/7) records the completed reference increment. The accepted earlier fixture gate is [AO-INC-002 / Issue #5](https://github.com/bobrs/Application-Observatory/issues/5). [AO-INC-001 / Issue #3](https://github.com/bobrs/Application-Observatory/issues/3) records the accepted self-catalog, and [AO-GATE-001 / Issue #1](https://github.com/bobrs/Application-Observatory/issues/1) retains the continuity deliberation. Read [DECISIONS](docs/DECISIONS.md) for provenance and bounded Sponsor instructions, and [GATES_AND_ROLES](docs/GATES_AND_ROLES.md) for the handoff convention. The initial [CODEX_INTAKE](docs/CODEX_INTAKE.md) remains available as provenance.
 
 ## Explore the documents
 
@@ -156,4 +168,4 @@ The documentation continuity increment was accepted and [PR #2 merged](https://g
 
 [PR #4](https://github.com/bobrs/Application-Observatory/pull/4) merged the self-catalog as `f19a0ac2758a4d59709c06fbf5d75d9611b46545`; [Issue #3](https://github.com/bobrs/Application-Observatory/issues/3#issuecomment-6482136137) records Sponsor-reported successful local use/visual acceptance, separate merge authorization and actual completion. This is not independent Test acceptance.
 
-[PR #6](https://github.com/bobrs/Application-Observatory/pull/6) merged AO-INC-002 as `bbe838c366bbd33f759fb6074a2b20993dae152a`. Step A reference PR #1 merged as `da5731368d49c0426fd57a52588ff3db3e4a69e2`. The Sponsor directly authorized bounded **AO-INC-003B** development in the Dev session; [Issue #7 continuity](https://github.com/bobrs/Application-Observatory/issues/7#issuecomment-6485726662) and [DECISIONS](docs/DECISIONS.md) record attribution and exclusions. This Step B branch awaits PM review and separate Sponsor merge authorization. No real Production, external deployment, health or independent Test acceptance is established.
+[PR #6](https://github.com/bobrs/Application-Observatory/pull/6) merged AO-INC-002 as `bbe838c366bbd33f759fb6074a2b20993dae152a`. Step A reference PR #1 merged as `da5731368d49c0426fd57a52588ff3db3e4a69e2`. The Sponsor directly authorized bounded **AO-INC-003B** development in the Dev session; [Issue #7 continuity](https://github.com/bobrs/Application-Observatory/issues/7#issuecomment-6485726662) and [DECISIONS](docs/DECISIONS.md) record attribution and exclusions. Step B subsequently merged unchanged as `dcb893848b28caecf5dd0c3535a9f4872c4ac029`; [Issue #7 completion](https://github.com/bobrs/Application-Observatory/issues/7#issuecomment-6487105707) distinguishes Dev evidence, PM acceptance, direct Sponsor merge authorization and the actual merge. The Sponsor separately authorized beginning Issue #9 development; [Dev intake](https://github.com/bobrs/Application-Observatory/issues/9#issuecomment-6487106032) and [DECISIONS](docs/DECISIONS.md) record this bounded first layout slice. AO-INC-004 awaits PM review and separate Sponsor merge authorization. No real Production, external deployment, health or independent Test acceptance is established.

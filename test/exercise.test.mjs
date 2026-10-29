@@ -138,7 +138,8 @@ test('POST controls require origin, CSRF, allowlisted fields; default catalog st
   assert.match(escaped.body, /&lt;img/);
   assert.doesNotMatch(escaped.body, /<img src=x|<script>/);
   const catalog = await app.inject('/applications/application-observatory');
-  assert.equal((catalog.body.match(/class="unknown">Unknown/g) || []).length, 3);
+  assert.match(catalog.body, /Actual operational state is <strong>Unknown/);
+  assert.match(catalog.body, /No concrete destinations connected/);
   assert.doesNotMatch(catalog.body, /<form/);
   assert.equal((await app.inject({ method: 'POST', url: '/', payload: {} })).statusCode, 405);
 });

@@ -13,28 +13,26 @@ function fixture(t) {
   return directory;
 }
 
-test('list and detail show provenance and three honest unknowns without advancement controls', async (t) => {
-  const app = createApplication(fixture(t));
-  t.after(() => app.close());
-  for (const url of ['/', '/applications/application-observatory']) {
-    const response = await app.inject(url);
-    assert.equal(response.statusCode, 200);
-    assert.match(response.headers['content-type'], /text\/html/);
-    assert.match(response.headers['content-security-policy'], /form-action 'none'/);
-    assert.match(response.body, /Seeded project metadata/);
-    assert.match(response.body, /Repository (source|product brief)/);
-    assert.match(response.body, /\d{4}-\d{2}-\d{2}.* UTC/);
-    assert.match(response.body, /Recorded next decision/);
-    assert.match(response.body, /PM review of AO-INC-001 evidence/);
-    for (const name of ['Development', 'Test', 'Production']) assert.match(response.body, new RegExp(name + ' recorded state'));
-    assert.equal((response.body.match(/class="unknown">Unknown/g) || []).length, 3);
-    assert.equal((response.body.match(/<dd>Not recorded<\/dd>/g) || []).length, 3);
-    assert.equal((response.body.match(/<dd>None recorded<\/dd>/g) || []).length, 3);
-    assert.equal((response.body.match(/<dd>Not observed<\/dd>/g) || []).length, 3);
-    assert.doesNotMatch(response.body, /<(form|input|button|script)\b/i);
-    assert.doesNotMatch(response.body, /<dd>(Healthy|Failed|Approved|Deployed|Passed|Not applicable)<\/dd>/i);
-  }
-  assert.match((await app.inject('/')).body, /1 application<\/span>/);
+test('executive portfolio separates two applications, keeps controls behind drill-down, and preserves historical self metadata', async (t) => {
+  const app = createApplication(fixture(t)); t.after(() => app.close());
+  const portfolio = await app.inject('/');
+  assert.equal(portfolio.statusCode, 200); assert.match(portfolio.headers['content-security-policy'], /form-action 'none'/);
+  assert.match(portfolio.body, /Executive portfolio/); assert.match(portfolio.body, /2 applications/);
+  assert.match(portfolio.body, /data-application="application-observatory"/); assert.match(portfolio.body, /data-application="hello-observatory"/);
+  assert.match(portfolio.body, /Next responsible role/); assert.match(portfolio.body, /Unknown/);
+  assert.doesNotMatch(portfolio.body, /<(form|input|button|script)\b/i);
+  assert.doesNotMatch(portfolio.body, /PM review of AO-INC-001 evidence|class="reference-card"|name="candidateId"/);
+  const detail = await app.inject('/applications/application-observatory');
+  assert.equal(detail.statusCode, 200); assert.match(detail.body, /No concrete destinations connected/);
+  assert.match(detail.body, /Development, Test and Production remain unknown/);
+  assert.match(detail.body, /historical snapshot, not live workflow state/); assert.match(detail.body, /PM review of AO-INC-001 evidence/);
+  assert.match(detail.body, /Seeded project metadata/); assert.match(detail.body, /source_revision/);
+  assert.match(detail.body, /No operational activity recorded for this application/);
+  assert.doesNotMatch(detail.body, /<(form|input|button|script)\b/i);
+  const hello = await app.inject('/applications/hello-observatory');
+  assert.equal(hello.statusCode, 200); assert.match(hello.body, /Local reference session inactive/);
+  assert.match(hello.body, /not a database seed, runtime observation or registration timestamp/);
+  assert.doesNotMatch(hello.body, /<(form|input|button|script)\b/i);
   assert.equal((await app.inject('/styles.css')).statusCode, 200);
   assert.equal((await app.inject('/applications/missing')).statusCode, 404);
   assert.equal((await app.inject('/not-a-route')).statusCode, 404);
@@ -73,13 +71,13 @@ test('built server binds loopback and retains its first seed across restart and 
     server = await startLocalServer(directory);
     assert.match(server.address, /^http:\/\/127\.0\.0\.1:\d+$/);
     const first = await (await fetch(`${server.address}/applications/application-observatory`)).text();
-    const firstTimestamp = first.match(/datetime="([^"]+)"/)[1];
+    const firstTimestamp = first.match(/&quot;recorded_at&quot;: &quot;([^&]+)&quot;/)[1];
     await server.stop();
     server = undefined;
     server = await startLocalServer(directory);
     const second = await (await fetch(`${server.address}/applications/application-observatory`)).text();
-    assert.equal(second.match(/datetime="([^"]+)"/)[1], firstTimestamp);
-    assert.match(await (await fetch(server.address)).text(), /1 application<\/span>/);
+    assert.equal(second.match(/&quot;recorded_at&quot;: &quot;([^&]+)&quot;/)[1], firstTimestamp);
+    assert.match(await (await fetch(server.address)).text(), /2 applications<\/span>/);
     assert.equal(first, second);
     await server.stop();
     server = undefined;

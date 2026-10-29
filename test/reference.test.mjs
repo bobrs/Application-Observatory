@@ -147,7 +147,7 @@ test('version witness rejects malformed, wrong app/context/boot, unknown artifac
 test('reference UI is opt-in, scoped/CSRF protected, keeps real self unknown, and preserves explicit historical observations', async () => withReference(async (exercise) => {
   const app = createApplication(exercise.workspace.directory, exercise);
   try {
-    let page = await app.inject('/reference'); assert.equal(page.statusCode, 200); assert.match(page.body, /Current observation unavailable/);
+    let page = await app.inject('/reference'); assert.equal(page.statusCode, 200); assert.match(page.body, /Unknown/);
     assert.match(page.body, /NOT REAL PRODUCTION/); assert.doesNotMatch(page.body, /latest\/package|command=/);
     const base = { method: 'POST', url: '/reference/refresh', headers: { host: 'localhost', origin: 'http://localhost', 'content-type': 'application/x-www-form-urlencoded' } };
     assert.equal((await app.inject({ ...base, body: 'csrf=wrong' })).statusCode, 403);
