@@ -30,17 +30,32 @@ function compactLocation(application: ApplicationView) {
   return `${destinations.length} destinations · ${new Set(current.map((item) => item.observation?.version)).size} observed versions${uncertain ? ` · ${uncertain} unknown/stale` : ''}${destinations.some((item) => item.state === 'Exception') ? ' · discrepancy' : ''}`;
 }
 function compactAttention(application: ApplicationView) {
-  const unknown = application.destinations.filter((item) => item.uncertainRequestId).length;
-  if (unknown) return `${unknown} execution outcome${unknown === 1 ? '' : 's'} unknown`;
-  const uncertain = application.destinations.filter((item) => item.state !== 'Observed').length;
-  if (uncertain) return `${uncertain} destination${uncertain === 1 ? '' : 's'} need attention`;
+  const signals: string[] = [];
   const pending = application.pendingChanges ?? [];
-  if (pending.length) return `${pending.length} pending change${pending.length === 1 ? '' : 's'} · ${pending.some((item) => item.status === 'Decision required') ? 'decision required' : 'declared, not dispatched'}`;
-  return application.destinations.length ? 'No pending changes recorded' : 'Observation scope undecided';
+  const decisions = pending.filter((change) => change.status === 'Decision required').length;
+  const declarations = pending.filter((change) => change.status === 'Declared authorization').length;
+  if (decisions) signals.push(`${decisions} decision${decisions === 1 ? '' : 's'} pending`);
+  if (declarations) signals.push(`${declarations} declared authorization${declarations === 1 ? '' : 's'} pending`);
+  const unknown = application.destinations.filter((item) => item.uncertainRequestId).length;
+  if (unknown) signals.push(`${unknown} execution outcome${unknown === 1 ? '' : 's'} unknown`);
+  const uncertain = application.destinations.filter((item) => item.state !== 'Observed');
+  if (uncertain.length) {
+    const states = new Set(uncertain.map((item) => item.state));
+    signals.push(states.size === 1 ? uncertain[0]!.state === 'Exception'
+      ? `${uncertain.length} version discrepanc${uncertain.length === 1 ? 'y' : 'ies'}`
+      : `${uncertain.length} ${uncertain[0]!.state.toLowerCase()} destination${uncertain.length === 1 ? '' : 's'}`
+      : `${uncertain.length} destinations need attention`);
+  }
+  return signals.length ? signals.join(' · ') : application.destinations.length ? 'No pending changes recorded' : 'Observation scope undecided';
+}
+function compactResponsibility(application: ApplicationView) {
+  const roles = [...new Set((application.pendingChanges ?? []).map((change) => change.nextRole))];
+  return roles.length ? `${roles.slice(0, 2).join(' / ')}${roles.length > 2 ? ` +${roles.length - 2} more roles` : ''} · recorded request`
+    : `${application.nextRole} · suggested next step`;
 }
 export function portfolioPage(applications: ApplicationView[]) {
   return layout('Applications', `<div class="register-heading"><h1>Applications</h1><span class="count">${applications.length} known application${applications.length === 1 ? '' : 's'}</span></div>
-    <div class="portfolio-register">${applications.map((application) => `<article class="portfolio-row" data-application="${e(application.id)}"><div class="row-overview"><a class="application-name" href="/applications/${encodeURIComponent(application.id)}">${e(application.name)}</a><p class="row-location" aria-label="Version and destinations">${e(compactLocation(application))}</p><p class="row-attention" aria-label="Attention and responsible role">${e(compactAttention(application))}<span>${e(application.nextRole)}${application.pendingChanges?.length ? ' · recorded request' : ' · suggested next step'}</span></p></div>
+    <div class="portfolio-register">${applications.map((application) => `<article class="portfolio-row" data-application="${e(application.id)}"><div class="row-overview"><a class="application-name" href="/applications/${encodeURIComponent(application.id)}">${e(application.name)}</a><p class="row-location" aria-label="Version and destinations">${e(compactLocation(application))}</p><p class="row-attention" aria-label="Attention and responsible role">${e(compactAttention(application))}<span>${e(compactResponsibility(application))}</span></p></div>
     <details class="row-context"><summary><span class="sr-only">Context for ${e(application.name)}</span><span class="row-chevron" aria-hidden="true">⌄</span></summary><div class="expanded-context"><p><strong>${e(application.kind)}</strong> · ${e(application.purpose)}</p><p class="source-note"><strong>Stewardship:</strong> ${e(application.stewardship)}</p><p>${e(application.recognition)}</p>${locationSummary(application)}<p>${e(attention(application))}</p><p><strong>Suggested next step:</strong> ${e(application.nextAction)}</p><details><summary>Sources and snapshot times</summary><ul>${application.destinations.map((destination) => `<li>${e(destination.name)}: ${e(destination.state)} · ${destination.observation ? `${time(destination.observation.recordedAt)} · ${e(destination.observation.source)}` : 'No observation recorded'}</li>`).join('')}</ul>${json(application.metadata)}</details><a class="button-link" href="/applications/${encodeURIComponent(application.id)}">Open application →</a></div></details></article>`).join('')}</div>
     <p class="source-note register-help">Unknown is not healthy, failed or approved. Version snapshots do not establish health or independent Test acceptance. Suggested next steps are not recorded directives or authorizations.</p>`);
 }

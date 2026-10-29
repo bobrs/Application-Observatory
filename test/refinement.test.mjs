@@ -81,3 +81,39 @@ test('application-wide pending projection retains all applicable requests and ex
     assert.match(page.body, /activity-history/); assert.match(page.body, /Full activity &amp; request history/);
   }, () => new Date(tick).toISOString());
 });
+
+test('collapsed scan combines uncertainty with every pending decision type and uses pending next roles, not generic or approving roles', async () => {
+  const { portfolioPage } = await import('../dist/portfolio-views.js');
+  const sample = { instanceId: 'unit-instance', bootId: 'unit-boot', outcome: 'observed', digest: 'sha256:unit-fixture', version: '1.1.0', generation: null, operationId: null, observedAt: '2026-10-29T00:00:00.000Z', recordedAt: '2026-10-29T00:00:00.000Z', source: 'Synthetic unit fixture', detail: 'Not a runtime observation' };
+  for (const state of ['Unknown', 'Stale', 'Exception']) {
+    const entry = { ...referenceView(), nextRole: 'Generic steward', destinations: [{ id: 'unit', name: 'Unit fixture', stage: 'Development', disposable: true, state, explanation: 'Synthetic fixture', observation: sample, lastKnown: sample, uncertainRequestId: 'uncertain', evidence: {} }],
+      pendingChanges: [
+        { requestId: 'decision', candidate: '1.2.0', destination: 'Other target', nextRole: 'Decision reviewer', status: 'Decision required' },
+        { requestId: 'declaration', candidate: '1.0.0', destination: 'Other target', nextRole: 'Release operator', status: 'Declared authorization', decision: { role: 'Approving Sponsor' } },
+      ] };
+    const html = portfolioPage([entry]); const scan = html.match(/class="row-attention"[^>]*>([\s\S]*?)<\/p>/)[1];
+    assert.match(scan, /1 decision pending/); assert.match(scan, /1 declared authorization pending/); assert.match(scan, /1 execution outcome unknown/);
+    assert.match(scan, state === 'Exception' ? /1 version discrepancy/ : new RegExp(`1 ${state.toLowerCase()} destination`));
+    assert.match(scan, /Decision reviewer \/ Release operator/); assert.match(scan, /recorded request/);
+    assert.doesNotMatch(scan, /Generic steward|Approving Sponsor|failed|healthy/);
+  }
+});
+
+test('unrelated stale destination and unknown execution cannot hide actionable Test decisions in the real collapsed portfolio', async () => {
+  let tick = Date.now() - 360000;
+  await fixture(async (exercise, app) => {
+    await exercise.observe('dev-reference'); // A genuine old snapshot; no stored evidence is edited.
+    tick = Date.now(); await exercise.observe('test-reference'); await exercise.observe('production-reference');
+    const undecided = exercise.createRequest('1.2.0', 'test-reference', 'normal');
+    const authorized = exercise.createRequest('1.0.0', 'test-reference', 'normal'); decide(exercise, authorized.id);
+    const row = async () => (await app.inject('/')).body.match(/data-application="hello-observatory">[\s\S]*?class="row-attention"[^>]*>([\s\S]*?)<\/p>/)[1];
+    let scan = await row(); assert.match(scan, /1 stale destination/); assert.match(scan, /1 decision pending/); assert.match(scan, /1 declared authorization pending/);
+    assert.match(scan, /Local demo operator \(self-declared role\)/);
+    await exercise.observe('dev-reference');
+    const uncertain = exercise.createRequest('1.0.0', 'dev-reference', 'lost-receipt'); decide(exercise, uncertain.id); await exercise.apply(uncertain.id); await exercise.observe('dev-reference', uncertain.id);
+    scan = await row(); assert.match(scan, /1 execution outcome unknown/); assert.match(scan, /1 decision pending/); assert.match(scan, /1 declared authorization pending/);
+    assert.equal(exercise.events(uncertain.id).find((event) => event.kind === 'adapter result').data.outcome, 'unknown');
+    assert.deepEqual(new Set(pendingChanges(exercise).map((change) => change.requestId)), new Set([undecided.id, authorized.id]));
+    assert.equal(exercise.attempt(authorized.id), undefined); assert.equal(exercise.attempt(undecided.id), undefined);
+  }, () => new Date(tick).toISOString());
+});

@@ -83,6 +83,20 @@ try {
   assert.equal(await page.locator('.activity-preview > li').count(), 3);
   const sections = await page.locator('#pending-changes,#propose-change,#recent-activity').evaluateAll((elements) => elements.map((element) => element.id)); assert.deepEqual(sections, ['pending-changes', 'propose-change', 'recent-activity']);
   await capture('pending-application-desktop'); await page.setViewportSize({ width: 390, height: 844 }); await capture('pending-application-mobile'); await page.setViewportSize({ width: 1440, height: 1050 });
+  // Advisory regression: an unrelated unavailable destination must not hide Test's pending commitments.
+  await exercise.targets.get('dev-reference').stop(); await exercise.observe('dev-reference');
+  await page.goto(address);
+  const attention = page.locator('[data-application=hello-observatory] .row-attention');
+  assert.match(await attention.innerText(), /1 decision pending/);
+  assert.match(await attention.innerText(), /1 declared authorization pending/);
+  assert.match(await attention.innerText(), /1 unknown destination/);
+  assert.match(await attention.innerText(), /Local demo operator \(self-declared role\)/);
+  await capture('advisory-mixed-attention-desktop');
+  await page.setViewportSize({ width: 390, height: 844 }); await capture('advisory-mixed-attention-mobile');
+  await page.setViewportSize({ width: 1440, height: 1050 });
+  await page.goto(`${address}/applications/hello-observatory`);
+  assert.equal(await page.locator('[data-pending-request]').count(), 2);
+  scenarios.push('PASS: unrelated unavailable Development target coexists with one pending decision and one declared authorization on Test; collapsed row shows all facts plus pending next role, with no dispatch inferred; desktop/mobile no overflow');
   await page.getByText('Full activity & request history', { exact: true }).click(); await capture('expanded-activity-history');
   await page.goto(`${address}/reference/requests/${requestId}`); await page.getByRole('button', { name: 'Upgrade to 1.2.0', exact: true }).click();
   assert.equal(exercise.readBack(requestId), null); assert.equal(exercise.events(requestId).at(-1).data.outcome, 'completed');
