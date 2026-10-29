@@ -51,3 +51,7 @@ Exploratory browser checks found a text locator matching both visible context an
 All **18 screenshots and six JSON reports** are covered by [SHA256SUMS](SHA256SUMS). Check with `shasum -a 256 -c SHA256SUMS` from this directory.
 
 Limits: Dev-run macOS/Chromium checks, not independent Test acceptance, health, standing or hostile-host attestation. Row height is content-dependent and mobile/long text wraps. Pending/readiness/freshness are evaluated on render, not live polling. This remains the same self-declared bounded local demo; no editable registry, new execution targets, integrations, permissions/IAM, schema, dependencies/framework, CI, real Production or external deployment. No unrelated project or GhostSentry3 access. **Stop at an unmerged PR for PM and separate Sponsor merge review.**
+
+## Subsequent advisory refinement
+
+[The advisory follow-up](advisory/README.md) preserves pending commitments alongside uncertainty in the collapsed row and uses the pending next responsible role. It adds fresh source-stamped tests and desktop/mobile captures without replacing this original evidence. The PR records the new current tested head; this original 35-test submission remains historical provenance.
