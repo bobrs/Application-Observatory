@@ -1,4 +1,16 @@
 export const styles = `
+.reference-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:18px; }
+.reference-card { padding:24px; border-top:4px solid #8a9c68; }
+.reference-card:nth-child(2) { border-top-color:#76a5c8; }
+.reference-card:nth-child(3) { border-top-color:#c48d64; }
+.reference-card .version-number { font-size:clamp(42px,5vw,70px); font-weight:750; letter-spacing:-3px; line-height:1.15; margin:24px 0 6px; color:var(--ink); }
+.reference-card time { font-size:11px; }
+.demo-warning { font-size:10px; font-weight:750; letter-spacing:1px; color:#854113; }
+.latest-action { padding-top:18px; margin-top:20px; border-top:1px solid var(--line); font-size:13px; }
+.reference-selection { display:grid; grid-template-columns:1fr 1fr; gap:24px; }
+.reference-card details { overflow-wrap:anywhere; }
+@media(max-width:800px) { .reference-grid { grid-template-columns:1fr; } .reference-selection { grid-template-columns:1fr; gap:0; } }
+
 :root {
   color-scheme:light;
   --ink:#18312e;

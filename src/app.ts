@@ -11,7 +11,7 @@ export function createApplication(directory?: string, exercise?: Exercise) {
   app.addHook('onClose', async () => { try { await exercise?.close(); } finally { catalog.close(); } });
   app.addHook('onRequest', async (request, reply) => {
     const pathname = request.url.split('?')[0]!;
-    const exerciseRoute = !!exercise && (pathname === '/exercise' || pathname.startsWith('/exercise/'));
+    const exerciseRoute = !!exercise && (pathname === (exercise.reference ? '/reference' : '/exercise') || pathname.startsWith(exercise.reference ? '/reference/' : '/exercise/'));
     reply.header('Content-Security-Policy', `default-src 'none'; style-src 'self'; img-src 'self' data:; base-uri 'none'; frame-ancestors 'none'; form-action ${exerciseRoute ? "'self'" : "'none'"}`)
       .header('X-Content-Type-Options', 'nosniff')
       .header('Referrer-Policy', exerciseRoute ? 'same-origin' : 'no-referrer')
@@ -29,7 +29,7 @@ export function createApplication(directory?: string, exercise?: Exercise) {
       return reply.code(405).header('Allow', 'GET, HEAD').type('text/plain').send('This increment is read-only.');
     }
   });
-  app.get('/', async (_request, reply) => reply.type('text/html').send(catalogPage(catalog.list(), !!exercise)));
+  app.get('/', async (_request, reply) => reply.type('text/html').send(catalogPage(catalog.list(), exercise?.reference ? 'reference' : !!exercise)));
   app.get<{ Params: { id: string } }>('/applications/:id', async (request, reply) => {
     const application = catalog.find(request.params.id);
     return application

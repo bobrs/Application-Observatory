@@ -16,11 +16,11 @@ function timestamp(value: string): string {
   return `<time datetime="${escapeHtml(value)}">${escapeHtml(value.replace('T', ' ').replace('Z', ' UTC'))}</time>`;
 }
 
-export function layout(title: string, content: string, exercise = false): string {
+export function layout(title: string, content: string, exercise: boolean | 'reference' = false): string {
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(title)} · Application Observatory</title><link rel="stylesheet" href="/styles.css"><link rel="icon" href="data:,"></head><body>
-  <a class="skip-link" href="#main">Skip to content</a><header><div class="shell"><div class="topbar"><a class="brand" href="/"><span class="mark" aria-hidden="true"></span>Application Observatory</a><span class="mode">${exercise ? 'Disposable local release exercise' : 'Local self-catalog · Read-only'}</span></div></div></header>
+  <a class="skip-link" href="#main">Skip to content</a><header><div class="shell"><div class="topbar"><a class="brand" href="/"><span class="mark" aria-hidden="true"></span>Application Observatory</a><span class="mode">${exercise === 'reference' ? 'Three local reference destinations' : exercise ? 'Disposable local release exercise' : 'Local self-catalog · Read-only'}</span></div></div></header>
   <main id="main" class="shell">${content}</main>
-  <footer><div class="shell footer-row"><p>A shared view of what is known, and what is not.</p><p>${exercise ? 'AO-INC-002 · Fixture only · Health not evaluated' : 'AO-INC-001 · Seeded metadata, no live observations'}</p></div></footer></body></html>`;
+  <footer><div class="shell footer-row"><p>A shared view of what is known, and what is not.</p><p>${exercise === 'reference' ? 'AO-INC-003B · Disposable demo only · Health not evaluated' : exercise ? 'AO-INC-002 · Fixture only · Health not evaluated' : 'AO-INC-001 · Seeded metadata, no live observations'}</p></div></footer></body></html>`;
 }
 
 function environments(): string {
@@ -33,9 +33,9 @@ function nextDecision(app: Application): string {
 
 const notice = `<aside class="notice">Project metadata is seeded from repository documents. Environment state is <strong>unknown</strong> until supported by observations. A running catalog does not verify deployment, acceptance or health.</aside>`;
 
-export function catalogPage(applications: Application[], exercise = false): string {
+export function catalogPage(applications: Application[], exercise: boolean | 'reference' = false): string {
   return layout('Application catalog', `<p class="eyebrow">Know the state. See the source.</p><h1>Application catalog</h1><p class="intro">Where software stands, what supports that view, and the next decision to make.</p>${notice}
-  ${exercise ? '<p><a class="button-link" href="/exercise">Open local release exercise →</a></p>' : ''}<div class="section-heading"><h2>Catalog entries</h2><span class="count">${applications.length} application${applications.length === 1 ? '' : 's'}</span></div>
+  ${exercise === 'reference' ? '<p><a class="button-link" href="/reference">Open three reference destinations →</a></p>' : exercise ? '<p><a class="button-link" href="/exercise">Open local release exercise →</a></p>' : ''}<div class="section-heading"><h2>Catalog entries</h2><span class="count">${applications.length} application${applications.length === 1 ? '' : 's'}</span></div>
   ${applications.map((app) => `<article class="panel"><div class="catalog-heading"><h2>${escapeHtml(app.name)}</h2><span class="tag">Self-entry</span></div><p class="purpose">${escapeHtml(app.purpose)}</p><p class="metadata-line"><strong>Stewardship:</strong> ${escapeHtml(app.stewardship)}</p>
   <p class="metadata-line">Seeded project metadata · ${externalLink(app.source_url, 'Repository source')} · Recorded ${timestamp(app.recorded_at)}</p>${environments()}${nextDecision(app)}<div class="catalog-footer"><span class="source-note">No Test acceptance, deployment or health evidence recorded.</span><a class="button-link" href="/applications/${encodeURIComponent(app.id)}">View application <span aria-hidden="true">↗</span></a></div></article>`).join('')}`);
 }

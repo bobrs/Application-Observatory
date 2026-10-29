@@ -1,0 +1,22 @@
+{
+  "sourceCommit": "1522033d21d890bfa418db2c60a6423c1cae74da",
+  "sourceDirty": false,
+  "node": "24.22.1",
+  "npm": "11.13.0",
+  "platform": "macOS arm64",
+  "commands": {
+    "npm ci --no-fund": "PASS: 57 packages installed / 58 audited, no known package vulnerabilities reported; not a security assessment",
+    "npm run verify": "PASS: strict TypeScript check, build, 28 native tests / 0 failures / 0 skipped",
+    "npm run demo": "PASS: accepted self-catalog regression",
+    "npm run demo:exercise": "PASS: accepted data-fixture workflow regression",
+    "npm run demo:reference": "PASS: real three-destination flow, upgrade/rollback, evidence disclosure, faults, desktop/mobile; no browser/HTTP errors or external requests",
+    "git diff --check origin/main...HEAD": "PASS"
+  },
+  "limitations": [
+    "Developer-run checks only; no independent Test acceptance or health certification",
+    "macOS arm64/Chromium only",
+    "Same-host trusted fixed reference packages; not hostile-host or malicious same-user isolation",
+    "Stop/restart creates brief unavailability; explicit workspace resume starts fresh retained selections, never replays consumed requests",
+    "No external deployment, CI, new dependency or schema migration"
+  ]
+}
