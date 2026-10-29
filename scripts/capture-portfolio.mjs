@@ -50,13 +50,13 @@ try {
   await page.goto(address);
   assert.equal(await page.locator('[data-application]').count(), 2); assert.equal(await page.locator('form,button,input,script').count(), 0);
   await capture('portfolio-unknown-desktop');
-  await page.locator('[data-application=hello-observatory]').getByRole('link', { name: 'View application' }).click();
+  await page.locator('[data-application=hello-observatory]').getByRole('link', { name: 'Hello Observatory', exact: true }).click();
   assert.equal(new URL(page.url()).pathname, '/applications/hello-observatory');
   await page.getByRole('button', { name: 'Refresh observations', exact: true }).click();
   await page.goto(`${address}/applications/hello-observatory`); await capture('application-observed-desktop');
   await page.getByRole('link', { name: 'Application portfolio', exact: true }).click(); await capture('portfolio-observed-desktop');
   await page.setViewportSize({ width: 390, height: 844 }); await capture('portfolio-observed-mobile');
-  await page.locator('[data-application=hello-observatory]').getByRole('link', { name: 'View application' }).click(); await capture('application-observed-mobile');
+  await page.locator('[data-application=hello-observatory]').getByRole('link', { name: 'Hello Observatory', exact: true }).click(); await capture('application-observed-mobile');
   await page.setViewportSize({ width: 1440, height: 1050 });
   await page.getByRole('combobox', { name: /^Version/ }).selectOption('1.2.0'); await page.getByRole('combobox', { name: /^Destination/ }).selectOption('test-reference');
   await page.getByRole('button', { name: 'Review change', exact: true }).click(); const requestId = page.url().split('/').at(-1);

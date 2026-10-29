@@ -15,13 +15,23 @@ export function transition(plan: Plan) {
   const after = referenceCandidates.findIndex((item) => item.id === plan.candidateId);
   return before < 0 ? 'Activate' : after < before ? 'Rollback' : after > before ? 'Upgrade' : 'Restart';
 }
-export function referencePage(exercise: Exercise) {
-  const controls = `<section class="panel selection"><h2>Propose a version change</h2><p>Select an accepted artifact and a specific disposable destination. Review readiness and a bounded decision before anything changes.</p>
-    <form method="post" action="/reference/requests">${token(exercise)}<div class="reference-selection"><label>Version<select name="candidateId">${exercise.candidates.map((item) => `<option value="${e(item.id)}">${e(item.label)}</option>`).join('')}</select></label><label>Destination<select name="environmentId">${exercise.environments.map((item) => `<option value="${item.id}">${e(item.name)} — ${e(item.stage)}${item.stage === 'Production' ? ' · DISPOSABLE DEMO ONLY' : ''}</option>`).join('')}</select></label></div>
+export function selectedDestination(exercise: Exercise, value: unknown): string | undefined {
+  if (value === undefined) return undefined;
+  if (typeof value !== 'string' || !exercise.environments.some((destination) => destination.id === value)) throw new Error('Choose a known local destination.');
+  return value;
+}
+export function selectionError() {
+  return layout('Unknown destination', '<h1>Choose a known local destination</h1><p>No request or decision was created.</p><a href="/applications/hello-observatory">Return to application detail</a>');
+}
+export function referencePage(exercise: Exercise, value?: unknown) {
+  const selected = selectedDestination(exercise, value);
+  const controls = `<section class="panel selection" id="propose-change" tabindex="-1"><h2>Propose a version change</h2>${selected ? `<p class="context-selection">Destination preselected: <strong>${e(exercise.environment(selected).name)}</strong>. Review the version and decision before explicitly applying.</p>` : ''}<p>Select an accepted artifact and a specific disposable destination. Review readiness and a bounded decision before anything changes.</p>
+    <form method="post" action="/reference/requests">${token(exercise)}<div class="reference-selection"><label>Version<select name="candidateId">${exercise.candidates.map((item) => `<option value="${e(item.id)}">${e(item.label)}</option>`).join('')}</select></label><label>Destination<select name="environmentId">${exercise.environments.map((item) => `<option value="${item.id}"${item.id === selected ? ' selected' : ''}>${e(item.name)} — ${e(item.stage)}${item.stage === 'Production' ? ' · DISPOSABLE DEMO ONLY' : ''}</option>`).join('')}</select></label></div>
     <details><summary>Demonstration faults</summary><p>Diagnostic options, not everyday release conditions. The selected condition is bound to the exact request and decision.</p><label>Injected condition<select name="fault"><option value="normal">Normal execution</option><option value="refuse">Refuse before stopping the app</option><option value="launch-failure">Fail startup after stopping the app</option><option value="lost-receipt">Withhold receipt after real launch</option></select></label></details><button>Review change</button></form></section>
     <p class="source-note">Observations expire for action purposes after ${lifetime / 60000} minutes. Refresh reads each owned endpoint independently; freshness updates at page render, not by polling.</p>
-    <details><summary>Request history and accepted artifact provenance</summary><p>Only the three accepted Step A packages can execute. Whole-package identity is distinct from source revision and HTTP response hash; runtime self-report is not hostile-host attestation.</p>${evidence('Accepted artifact index', exercise.candidates)}<p><a href="https://github.com/bobrs/observatory-hello-reference/pull/1">Accepted reference source and contract</a></p><ol>${exercise.requests().map((plan) => `<li><a href="/reference/requests/${plan.id}">${transition(plan)} ${e(exercise.environment(plan.environmentId).name)} to ${e(plan.candidateId)}</a> · ${time(plan.createdAt)}</li>`).join('')}</ol></details>`;
-  return applicationOverview(referenceView(exercise), { reference: true, controls, refresh: post(exercise, '/reference/refresh', 'Refresh observations') });
+    `;
+  const history = `    <details><summary>Request history and accepted artifact provenance</summary><p>Only the three accepted Step A packages can execute. Whole-package identity is distinct from source revision and HTTP response hash; runtime self-report is not hostile-host attestation.</p>${evidence('Accepted artifact index', exercise.candidates)}<p><a href="https://github.com/bobrs/observatory-hello-reference/pull/1">Accepted reference source and contract</a></p><ol>${exercise.requests().map((plan) => `<li><a href="/reference/requests/${plan.id}">${transition(plan)} ${e(exercise.environment(plan.environmentId).name)} to ${e(plan.candidateId)}</a> · ${time(plan.createdAt)}</li>`).join('')}</ol></details>`;
+  return applicationOverview(referenceView(exercise), { reference: true, controls, history, refresh: post(exercise, '/reference/refresh', 'Refresh observations') });
 }
 export function referenceRequestPage(exercise: Exercise, plan: Plan) {
   const destination = exercise.environment(plan.environmentId);

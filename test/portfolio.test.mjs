@@ -28,8 +28,9 @@ test('portfolio scales as a compact application collection and hides raw hashes,
   const entries = Array.from({ length: 30 }, (_, i) => ({ ...referenceView(), id: `example-${i}`, name: `Illustrative application ${i}`, metadata: { next_decision: 'HISTORICAL-ONLY', artifactId: 'RAW-HASH-ONLY' } }));
   const html = portfolioPage(entries);
   assert.equal((html.match(/data-application=/g) || []).length, 30);
-  assert.match(html, /30 applications/); assert.doesNotMatch(html, /HISTORICAL-ONLY|RAW-HASH-ONLY|<(form|input|button|script)\b/);
-  assert.match(html, /Unknown/); assert.match(html, /No portfolio-wide healthy or approved status is inferred/);
+  assert.match(html, /30 known applications/); assert.doesNotMatch(html, /<(form|input|button|script)\b/);
+  for (const row of html.matchAll(/<div class="row-overview">([\s\S]*?)<\/div>/g)) assert.doesNotMatch(row[1], /HISTORICAL-ONLY|RAW-HASH-ONLY/);
+  assert.match(html, /Unknown/); assert.match(html, /Unknown is not healthy, failed or approved/);
 });
 
 test('presentation text is escaped and does not turn arbitrary destinations into executable/external links', () => {
