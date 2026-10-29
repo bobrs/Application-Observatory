@@ -18,9 +18,14 @@ Act as the **Dev gate**. Review feasibility, propose the smallest adequate imple
 
 The preferred-stack profile is advisory. Challenge it when justified. Focus on the smallest useful self-observing portal, not a full enterprise platform.
 
-## Current bounded build
+## Current accepted baseline and program coordination
 
-AO-INC-004 merged as `64ba416a946d374fcbb9c04da7c42ed593b905b6`; [Issue #9 completion](https://github.com/bobrs/Application-Observatory/issues/9#issuecomment-6487788461) preserves provenance. The Sponsor directly authorized **AO-INC-005 / Issue #11**, transcribed in [Dev intake](https://github.com/bobrs/Application-Observatory/issues/11#issuecomment-6488333113). Scope: compact native expandable portfolio rows; safe contextual destination preselection into the existing shared form; applicable pending changes/decisions and three-entry activity preview/history. Keep controller/authorization/readiness, provenance, verification, observation, rollback, targets and persistence unchanged. No dependencies/framework, schema/seed/registry, integrations, permissions/IAM, deployment targets, CI or external deployment. Start from the verified accepted main on a feature branch, provide exact tested source/screenshots, push an unmerged PR, then stop for PM review and separate Sponsor merge authorization. Discovery is confined to this repository; no unrelated application or GhostSentry3 access.
+AO-INC-005 / PR #12 merged on `main` at `38c82d61c62c44555adc1781f1b331add873a844`. Verify the actual current baseline at entry. Prior AO-INC-005 instructions are historical; no external Lab adapter or deployment integration has been authorized by this coordination note.
+
+Application Observatory is a **participant**, not owner, of the private Observatory Program (`bobrs/Observatory-Program`). [Public coordination handoff](docs/PROGRAM_HANDOFF.md) summarizes the boundary without disclosing the private Lab. Proposed AO-X01 begins with **read-only discovery of an external observation interface**, contingent on the Lab proving a real evidence source. Do not implement dispatch, remote APIs, new permissions or registration based on a proposed architecture alone.
+
+No cross-repository writes or host discovery are implied. Request exact Sponsor-authorized scoped work in this repository before new implementation. GhostSentry3 remains protected and excluded.
+
 ## If authorized to implement
 
 - Distinguish source claims, observed state, test evidence, recommendations, authorizations, execution, and health.
