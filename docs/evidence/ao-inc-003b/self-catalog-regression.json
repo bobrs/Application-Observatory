@@ -1,0 +1,10 @@
+{
+  "sourceCommit": "1522033d21d890bfa418db2c60a6423c1cae74da",
+  "sourceDirty": false,
+  "capturedAt": "2026-10-29T02:08:34.644Z",
+  "node": "v24.22.1",
+  "platform": "darwin arm64",
+  "browser": "Chromium 156.0.8078.4",
+  "result": "PASS: desktop list/detail, mobile list/detail without horizontal overflow, navigation, three unknown environments, next decision, no page/console/HTTP errors or external requests",
+  "data": "Disposable local fixture; removed after capture. Seed timestamp is record creation, not observation time."
+}
