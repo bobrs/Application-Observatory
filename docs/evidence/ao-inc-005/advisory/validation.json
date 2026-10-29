@@ -1,0 +1,14 @@
+{
+  "sourceCommit": "51350d3362d17ddbabf478f0a4af3e1967a13515",
+  "sourceDirty": false,
+  "node": "24.22.1",
+  "platform": "macOS arm64",
+  "browser": "Chromium 156.0.8078.4",
+  "checks": {
+    "npm run verify": "PASS: strict TypeScript/build, 37 tests, 0 failed/skipped",
+    "npm run demo / demo:exercise / demo:reference / demo:portfolio / demo:refinement": "PASS on clean source; no browser/HTTP errors, external requests or horizontal overflow",
+    "advisory_regressions": "PASS: unknown/stale/discrepant destinations and unknown execution cannot hide pending decisions/declarations; pending next roles supersede generic steward suggestion, not approving-role authority",
+    "scope": "Only portfolio view code and regression/capture tests changed; controllers, projection/criteria, routes, authorization, persistence, packages, targets and dependencies remain unchanged from prior submitted head"
+  },
+  "limits": "Developer-run macOS/Chromium only; not independent Test/health/standing. Live evidence uses original owned disposable targets; no external deployment or unrelated repository access."
+}

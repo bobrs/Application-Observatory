@@ -17,11 +17,12 @@ test('executive portfolio separates two applications, keeps controls behind dril
   const app = createApplication(fixture(t)); t.after(() => app.close());
   const portfolio = await app.inject('/');
   assert.equal(portfolio.statusCode, 200); assert.match(portfolio.headers['content-security-policy'], /form-action 'none'/);
-  assert.match(portfolio.body, /Executive portfolio/); assert.match(portfolio.body, /2 applications/);
+  assert.match(portfolio.body, /<h1>Applications<\/h1>/); assert.match(portfolio.body, /2 known applications/);
   assert.match(portfolio.body, /data-application="application-observatory"/); assert.match(portfolio.body, /data-application="hello-observatory"/);
-  assert.match(portfolio.body, /Next responsible role/); assert.match(portfolio.body, /Unknown/);
+  assert.match(portfolio.body, /Product Sponsor \/ steward/); assert.match(portfolio.body, /Unknown/);
   assert.doesNotMatch(portfolio.body, /<(form|input|button|script)\b/i);
-  assert.doesNotMatch(portfolio.body, /PM review of AO-INC-001 evidence|class="reference-card"|name="candidateId"/);
+  assert.doesNotMatch(portfolio.body, /class="reference-card"|name="candidateId"/);
+  for (const row of portfolio.body.matchAll(/<div class="row-overview">([\s\S]*?)<\/div>/g)) assert.doesNotMatch(row[1], /PM review of AO-INC-001 evidence/);
   const detail = await app.inject('/applications/application-observatory');
   assert.equal(detail.statusCode, 200); assert.match(detail.body, /No concrete destinations connected/);
   assert.match(detail.body, /Development, Test and Production remain unknown/);
@@ -77,7 +78,7 @@ test('built server binds loopback and retains its first seed across restart and 
     server = await startLocalServer(directory);
     const second = await (await fetch(`${server.address}/applications/application-observatory`)).text();
     assert.equal(second.match(/&quot;recorded_at&quot;: &quot;([^&]+)&quot;/)[1], firstTimestamp);
-    assert.match(await (await fetch(server.address)).text(), /2 applications<\/span>/);
+    assert.match(await (await fetch(server.address)).text(), /2 known applications<\/span>/);
     assert.equal(first, second);
     await server.stop();
     server = undefined;

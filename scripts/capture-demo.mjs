@@ -28,9 +28,9 @@ try {
   });
   await page.goto(server.address);
   assert.equal(await page.locator('[data-application]').count(), 2);
-  assert.equal(await page.getByText('2 applications', { exact: true }).count(), 1);
+  assert.equal(await page.getByText('2 known applications', { exact: true }).count(), 1);
   await page.screenshot({ path: join(output, 'catalog-desktop.png'), fullPage: true });
-  await page.locator('[data-application=application-observatory]').getByRole('link', { name: 'View application' }).click();
+  await page.locator('[data-application=application-observatory]').getByRole('link', { name: 'Application Observatory', exact: true }).click();
   assert.match(await page.title(), /Application Observatory/);
   assert.equal(await page.getByRole('heading', { name: 'No concrete destinations connected', exact: true }).count(), 1);
   assert.equal(await page.getByText('Application definition and historical metadata', { exact: true }).count(), 1);

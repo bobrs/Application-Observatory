@@ -1,6 +1,6 @@
 {
   "name": "application-observatory",
-  "version": "0.1.0-increment.4",
+  "version": "0.1.0-increment.5",
   "private": true,
   "type": "module",
   "license": "CC0-1.0",
@@ -18,7 +18,8 @@
     "demo:exercise": "node scripts/capture-exercise.mjs",
     "reference": "node dist/server.js --reference",
     "demo:reference": "node scripts/capture-reference.mjs",
-    "demo:portfolio": "node scripts/capture-portfolio.mjs"
+    "demo:portfolio": "node scripts/capture-portfolio.mjs",
+    "demo:refinement": "node scripts/capture-refinement.mjs"
   },
   "dependencies": {
     "better-sqlite3": "13.0.3",

@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import type { Exercise } from './controller.js';
-import { referencePage, referenceRequestPage } from '../reference/views.js';
+import { referencePage, referenceRequestPage, selectionError, selectedDestination } from '../reference/views.js';
 import { exerciseError, exercisePage, requestPage } from './views.js';
 
 export function exerciseRoutes(app: FastifyInstance, exercise: Exercise) {
@@ -11,7 +11,13 @@ export function exerciseRoutes(app: FastifyInstance, exercise: Exercise) {
     if (new Set(entries.map(([key]) => key)).size !== entries.length) { done(new Error('Duplicate form fields are not allowed.')); return; }
     done(null, Object.fromEntries(entries));
   });
-  app.get(prefix, async (_request, reply) => reply.type('text/html').send(exercise.reference ? referencePage(exercise) : exercisePage(exercise)));
+  app.get(prefix, async (request, reply) => {
+    if (!exercise.reference) return reply.type('text/html').send(exercisePage(exercise));
+    let selected: string | undefined;
+    try { selected = selectedDestination(exercise, (request.query as Record<string, unknown>).destination); }
+    catch { return reply.code(400).type('text/html').send(selectionError()); }
+    return reply.type('text/html').send(referencePage(exercise, selected));
+  });
   app.get<{ Params: { id: string } }>(`${prefix}/requests/:id`, async (request, reply) => {
     try { return reply.type('text/html').send(exercise.reference ? referenceRequestPage(exercise, exercise.plan(request.params.id)) : requestPage(exercise, exercise.plan(request.params.id))); }
     catch { return reply.code(404).type('text/html').send(exerciseError('Request not found or its stored identity is inconsistent.')); }

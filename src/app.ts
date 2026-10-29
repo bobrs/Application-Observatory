@@ -3,7 +3,7 @@ import { openCatalog } from './catalog.js';
 import { notFoundPage } from './views.js';
 import { portfolioViews, referenceView } from './portfolio.js';
 import { portfolioPage, applicationOverview } from './portfolio-views.js';
-import { referencePage } from './reference/views.js';
+import { referencePage, selectionError, selectedDestination } from './reference/views.js';
 import { styles } from './styles.js';
 import type { Exercise } from './exercise/controller.js';
 import { exerciseRoutes } from './exercise/routes.js';
@@ -34,9 +34,17 @@ export function createApplication(directory?: string, exercise?: Exercise) {
   });
   app.get('/', async (_request, reply) => reply.type('text/html').send(portfolioPage(portfolioViews(catalog.list(), exercise))));
   app.get<{ Params: { id: string } }>('/applications/:id', async (request, reply) => {
-    if (request.params.id === 'hello-observatory') return reply.type('text/html').send(exercise?.reference ? referencePage(exercise) : applicationOverview(referenceView(), {
-      controls: '<section class="panel selection"><h2>Local reference session inactive</h2><p>No reference processes were started or observed by this mode. Start the existing opt-in mode from the checkout with <code>npm run reference</code> to connect its three disposable local destinations. This is not a remote deployment command.</p></section>',
-    }));
+    if (request.params.id === 'hello-observatory') {
+      if (exercise?.reference) {
+        let selected: string | undefined;
+        try { selected = selectedDestination(exercise, (request.query as Record<string, unknown>).destination); }
+        catch { return reply.code(400).type('text/html').send(selectionError()); }
+        return reply.type('text/html').send(referencePage(exercise, selected));
+      }
+      return reply.type('text/html').send(applicationOverview(referenceView(), {
+        controls: '<section class="panel selection"><h2>Local reference session inactive</h2><p>No reference processes were started or observed by this mode. Start the existing opt-in mode from the checkout with <code>npm run reference</code> to connect its three disposable local destinations. This is not a remote deployment command.</p></section>',
+      }));
+    }
     const application = portfolioViews(catalog.list(), exercise).find((item) => item.id === request.params.id);
     return application ? reply.type('text/html').send(applicationOverview(application, { exerciseLink: !!exercise && !exercise.reference }))
       : reply.code(404).type('text/html').send(notFoundPage());
