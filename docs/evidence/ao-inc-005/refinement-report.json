@@ -1,0 +1,20 @@
+{
+  "sourceCommit": "fb3f55025bff709c3fe4ac13de414be42f96d1bd",
+  "sourceDirty": false,
+  "capturedAt": "2026-10-29T05:09:18.604Z",
+  "node": "v24.22.1",
+  "platform": "darwin arm64",
+  "browser": "Chromium 156.0.8078.4",
+  "collapsedRowHeights": [
+    79,
+    79
+  ],
+  "scenarios": [
+    "PASS: collapsed desktop rows 79/79px; independent Enter/Space disclosure vs name navigation; no nested interactive summary controls, state writes, observation or dispatch; desktop/mobile no overflow",
+    "PASS: each active card preselects its exact allowlisted destination and scrolls to the single shared form without creating a request; two applicable same-target requests shown, recommendations/declines/deferrals in history; pending → proposal → 3-event activity; explicit apply/observe remain distinct, consumed/stale work leaves pending",
+    "PASS: 30 clearly illustrative applications, long unbroken names/descriptions, collapsed and expanded desktop/mobile; no runtime registration, operational controls or overflow"
+  ],
+  "browserErrors": [],
+  "externalRequests": 0,
+  "limits": "Dev-run macOS/Chromium, not independent Test/health/standing. Only original three fixed reference targets execute; larger register is a labeled synthetic presentation fixture. Invalid/expired/refused preselection/pending cases are additionally covered by native integration tests."
+}

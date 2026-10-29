@@ -1,0 +1,34 @@
+{
+  "sourceCommit": "fb3f55025bff709c3fe4ac13de414be42f96d1bd",
+  "sourceDirty": false,
+  "capturedAt": "2026-10-29T05:09:12.143Z",
+  "node": "v24.22.1",
+  "platform": "darwin arm64",
+  "browser": "Chromium 156.0.8078.4",
+  "referenceReviewedCommit": "982aeb68451a8044a00c15a7f079861ac53e31bb",
+  "referenceMergeCommit": "da5731368d49c0426fd57a52588ff3db3e4a69e2",
+  "acceptedArtifacts": [
+    {
+      "id": "1.0.0",
+      "label": "1.0.0",
+      "digest": "sha256:53cfab8899f14848e3979a1afa2e41c12334fb05bccee5c55398d53598c04262"
+    },
+    {
+      "id": "1.1.0",
+      "label": "1.1.0",
+      "digest": "sha256:17498c7bc08280b1bc2077d9ee302bdada8fb401192f2efce61f594ad2b236e8"
+    },
+    {
+      "id": "1.2.0",
+      "label": "1.2.0",
+      "digest": "sha256:7410f8f433f8d7668000a290b573df8873334ca1f4aadc4622c48b76610b199f"
+    }
+  ],
+  "scenarios": [
+    "PASS: three real destination versions, desktop/mobile, explicit authorization/apply, real new-process upgrade and exact retained-package rollback, separate HTTP observations, other two boots unchanged",
+    "PASS: decline and stale request backend refusal; injected refusal/startup failure; withheld receipt stays unknown despite matching fresh version; failed refresh preserves explicitly historical last-known and two other independent observations"
+  ],
+  "browserErrors": [],
+  "externalRequests": 0,
+  "limits": "Developer checks on macOS arm64/Chromium; same-host trusted packages, not independent Test, health or hostile-host attestation. No external deployment."
+}

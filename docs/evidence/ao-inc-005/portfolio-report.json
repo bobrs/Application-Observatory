@@ -1,0 +1,15 @@
+{
+  "sourceCommit": "fb3f55025bff709c3fe4ac13de414be42f96d1bd",
+  "sourceDirty": false,
+  "capturedAt": "2026-10-29T05:09:15.780Z",
+  "node": "v24.22.1",
+  "platform": "darwin arm64",
+  "browser": "Chromium 156.0.8078.4",
+  "scenarios": [
+    "PASS: real portfolio has two separate applications and no operational controls; drill-down hosts scoped decisions/apply/refresh; completed request is consumed, fresh observation separate, lost receipt remains executive-visible despite matching version",
+    "PASS: clearly illustrative zero/one/three/six destinations with two per stage and an extra stage; 24-application portfolio desktop/mobile; no new runtime target or executable controls; no horizontal overflow"
+  ],
+  "browserErrors": [],
+  "externalRequests": 0,
+  "limits": "Dev-run macOS/Chromium checks, not independent Test/health/standing. Only original three fixed reference apps execute. Other destination/portfolio sizes are synthetic layout fixtures on a separate test server, never registrations or observations."
+}

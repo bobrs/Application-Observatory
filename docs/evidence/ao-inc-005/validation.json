@@ -1,0 +1,25 @@
+{
+  "sourceCommit": "fb3f55025bff709c3fe4ac13de414be42f96d1bd",
+  "sourceDirty": false,
+  "node": "24.22.1",
+  "npm": "11.13.0",
+  "platform": "macOS arm64",
+  "browser": "Chromium 156.0.8078.4",
+  "commands": {
+    "npm ci --no-fund": "PASS: 57 installed / 58 audited, zero known package vulnerabilities reported, not a security assessment",
+    "npm run verify": "PASS: strict TypeScript/build, 35 native tests, 0 failed/skipped",
+    "npm run demo": "PASS: default portfolio/self-state navigation",
+    "npm run demo:exercise": "PASS: original data-only fixture journey",
+    "npm run demo:reference": "PASS: real upgrade/retained rollback and failure/stale/unknown outcomes",
+    "npm run demo:portfolio": "PASS: zero/one/three/six destinations and 24-application synthetic layouts",
+    "npm run demo:refinement": "PASS: 79px collapsed rows, Enter/Space disclosure vs navigation, safe contextual preselection, application-wide pending, consumed state, 3-entry preview/full history, desktop/mobile and 30-app long-text layout"
+  },
+  "protectedSources": "Catalog/config/seed/schema, controller/model/workspace/adapter/target, reference verifier/launcher/packages, request-review function, POST handlers, origin/CSRF headers unchanged; lockfile differs only in project version",
+  "limitations": [
+    "Dev-run macOS/Chromium only, not independent Test/health/standing or hostile-host attestation",
+    "Pending is a read-only projection evaluated at render using existing readiness/authority checks; not a new authorization or domain/persistence model",
+    "GET preselection creates no operational record; readiness/apply remain explicit",
+    "Only original three owned reference apps execute; larger application/destination layouts are labeled synthetic fixtures",
+    "No framework, dependencies, integrations, permissions, registration, target, schema, CI or deployment changes"
+  ]
+}
