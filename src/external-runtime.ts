@@ -27,7 +27,8 @@ export const EXTERNAL_RECENT_EVENT_LIMIT = 20;
 export const EXTERNAL_RECENT_DIRECTIVE_LIMIT = 10;
 export const EXTERNAL_DIRECTIVE_EVENT_PREVIEW_LIMIT = 5;
 export const EXTERNAL_HISTORY_PAGE_SIZE = 20;
-export interface ExternalHistoryPage { events: StoredExternalEvent[]; page: number; pageSize: number; total: number; pageCount: number }
+export interface ExternalHistoryPage { events: StoredExternalEvent[]; pageSize: number; total: number; offset: number; through: number; nextBefore: number | null }
+export interface ExternalDirectivePage { directives: Array<Record<string, unknown>>; pageSize: number; total: number; offset: number; through: number; nextBefore: number | null }
 export interface ExternalTargetState {
   target: ExternalTarget; directive: (Directive & { actor: string; rationale: string }) | null;
   receipt: StoredExternalEvent | null; observation: StoredExternalEvent | null; lastObservation: StoredExternalEvent | null;
@@ -130,7 +131,7 @@ export class ExternalRuntime {
     if (input.action === 'rollback') {
       if (!state.fresh || !state.observation || state.observation.outcome !== 'observed') throw new ExternalRuntimeError('Rollback requires a fresh current observation.');
       if (input.artifactId === state.observation.artifactId) throw new ExternalRuntimeError('Rollback must select an earlier artifact than the current observed artifact.');
-      const retainedEarlier = this.db.prepare("SELECT 1 FROM external_events WHERE destination_id=? AND kind='observation' AND outcome='observed' AND artifact_id=? AND observed_at < ? LIMIT 1")
+      const retainedEarlier = this.db.prepare("SELECT 1 FROM external_events WHERE destination_id=? AND kind='observation' AND outcome='observed' AND artifact_id=? AND julianday(observed_at) < julianday(?) LIMIT 1")
         .get(target.id, input.artifactId, state.observation.observedAt);
       if (!retainedEarlier) throw new ExternalRuntimeError('Rollback must select a configured artifact observed earlier on this target.');
     }
@@ -219,8 +220,8 @@ export class ExternalRuntime {
     const directive = rawDirective ? { id: String(rawDirective.id), backendId: String(rawDirective.backend_id), applicationId: String(rawDirective.application_id), destinationId: String(rawDirective.destination_id), instanceId: String(rawDirective.instance_id), action: rawDirective.action as Directive['action'], version: String(rawDirective.version), artifactId: String(rawDirective.artifact_id), createdAt: String(rawDirective.created_at), expectedBootId: rawDirective.expected_boot_id === null ? null : String(rawDirective.expected_boot_id), actor: String(rawDirective.actor), rationale: String(rawDirective.rationale) } : null;
     const receiptRow = directive ? this.db.prepare("SELECT payload_json,recorded_at FROM external_events WHERE destination_id=? AND directive_id=? AND kind='receipt' ORDER BY seq DESC LIMIT 1").get(targetId, directive.id) as {payload_json:string;recorded_at:string} | undefined : undefined;
     const receipt = receiptRow ? { ...JSON.parse(receiptRow.payload_json), recordedAt: receiptRow.recorded_at } as StoredExternalEvent : null;
-    const latestObservationRow = this.db.prepare("SELECT payload_json,recorded_at FROM external_events WHERE destination_id=? AND kind='observation' ORDER BY observed_at DESC,seq DESC LIMIT 1").get(targetId) as {payload_json:string;recorded_at:string} | undefined;
-    const latestKnownRow = this.db.prepare("SELECT payload_json,recorded_at FROM external_events WHERE destination_id=? AND kind='observation' AND outcome='observed' ORDER BY observed_at DESC,seq DESC LIMIT 1").get(targetId) as {payload_json:string;recorded_at:string} | undefined;
+    const latestObservationRow = this.db.prepare("SELECT payload_json,recorded_at FROM external_events WHERE destination_id=? AND kind='observation' ORDER BY julianday(observed_at) DESC,seq DESC LIMIT 1").get(targetId) as {payload_json:string;recorded_at:string} | undefined;
+    const latestKnownRow = this.db.prepare("SELECT payload_json,recorded_at FROM external_events WHERE destination_id=? AND kind='observation' AND outcome='observed' ORDER BY julianday(observed_at) DESC,seq DESC LIMIT 1").get(targetId) as {payload_json:string;recorded_at:string} | undefined;
     const observation = latestObservationRow ? { ...JSON.parse(latestObservationRow.payload_json), recordedAt: latestObservationRow.recorded_at } as StoredExternalEvent : null;
     const known = latestKnownRow ? { ...JSON.parse(latestKnownRow.payload_json), recordedAt: latestKnownRow.recorded_at } as StoredExternalEvent : null;
     const now = this.now().getTime();
@@ -248,17 +249,34 @@ export class ExternalRuntime {
   events(targetId = this.target.id) { this.targetById(targetId); return (this.db.prepare('SELECT payload_json,recorded_at FROM external_events WHERE destination_id=? ORDER BY seq DESC LIMIT ?').all(targetId, EXTERNAL_RECENT_EVENT_LIMIT) as Array<{payload_json:string;recorded_at:string}>).map((row) => ({ ...JSON.parse(row.payload_json), recordedAt: row.recorded_at }) as StoredExternalEvent); }
   hasEarlierObservedArtifact(targetId: string, artifactId: string, beforeObservedAt: string): boolean {
     this.targetById(targetId);
-    return !!this.db.prepare("SELECT 1 FROM external_events WHERE destination_id=? AND kind='observation' AND outcome='observed' AND artifact_id=? AND observed_at < ? LIMIT 1")
+    return !!this.db.prepare("SELECT 1 FROM external_events WHERE destination_id=? AND kind='observation' AND outcome='observed' AND artifact_id=? AND julianday(observed_at) < julianday(?) LIMIT 1")
       .get(targetId, artifactId, beforeObservedAt);
   }
-  historyPage(targetId: string, page: number): ExternalHistoryPage {
+  historyPage(targetId: string, through?: number, before?: number): ExternalHistoryPage {
     this.targetById(targetId);
-    if (!Number.isSafeInteger(page) || page < 1) throw new ExternalRuntimeError('History page must be a positive safe integer.');
-    const total = Number((this.db.prepare('SELECT COUNT(*) AS count FROM external_events WHERE destination_id=?').get(targetId) as {count:number}).count);
-    const pageCount = Math.ceil(total / EXTERNAL_HISTORY_PAGE_SIZE);
-    if (page > Math.max(pageCount, 1)) throw new ExternalRuntimeError('History page is outside the retained event ledger.', 404);
-    const rows = this.db.prepare('SELECT payload_json,recorded_at FROM external_events WHERE destination_id=? ORDER BY seq DESC LIMIT ? OFFSET ?')
-      .all(targetId, EXTERNAL_HISTORY_PAGE_SIZE, (page - 1) * EXTERNAL_HISTORY_PAGE_SIZE) as Array<{payload_json:string;recorded_at:string}>;
-    return { events: rows.map((row) => ({ ...JSON.parse(row.payload_json), recordedAt: row.recorded_at }) as StoredExternalEvent), page, pageSize: EXTERNAL_HISTORY_PAGE_SIZE, total, pageCount };
+    const max = Number((this.db.prepare('SELECT COALESCE(MAX(seq),0) AS n FROM external_events WHERE destination_id=?').get(targetId) as {n:number}).n);
+    const snapshot = through ?? max;
+    const cursor = before ?? (snapshot + 1);
+    if (!Number.isSafeInteger(snapshot) || snapshot < 0 || snapshot > max || !Number.isSafeInteger(cursor) || cursor < 1 || cursor > snapshot + 1) throw new ExternalRuntimeError('Invalid event-history snapshot or cursor.');
+    const total = Number((this.db.prepare('SELECT COUNT(*) AS count FROM external_events WHERE destination_id=? AND seq<=?').get(targetId, snapshot) as {count:number}).count);
+    const offset = Number((this.db.prepare('SELECT COUNT(*) AS count FROM external_events WHERE destination_id=? AND seq<=? AND seq>=?').get(targetId, snapshot, cursor) as {count:number}).count);
+    const rows = this.db.prepare('SELECT seq,payload_json,recorded_at FROM external_events WHERE destination_id=? AND seq<=? AND seq<? ORDER BY seq DESC LIMIT ?')
+      .all(targetId, snapshot, cursor, EXTERNAL_HISTORY_PAGE_SIZE + 1) as Array<{seq:number;payload_json:string;recorded_at:string}>;
+    const nextBefore = rows.length > EXTERNAL_HISTORY_PAGE_SIZE ? rows[EXTERNAL_HISTORY_PAGE_SIZE - 1]!.seq : null;
+    const selected = rows.slice(0, EXTERNAL_HISTORY_PAGE_SIZE);
+    return { events: selected.map((row) => ({ ...JSON.parse(row.payload_json), recordedAt: row.recorded_at }) as StoredExternalEvent), pageSize: EXTERNAL_HISTORY_PAGE_SIZE, total, offset, through: snapshot, nextBefore };
+  }
+  directivePage(targetId: string, through?: number, before?: number): ExternalDirectivePage {
+    this.targetById(targetId);
+    const max = Number((this.db.prepare('SELECT COALESCE(MAX(rowid),0) AS n FROM external_directives WHERE destination_id=?').get(targetId) as {n:number}).n);
+    const snapshot = through ?? max;
+    const cursor = before ?? (snapshot + 1);
+    if (!Number.isSafeInteger(snapshot) || snapshot < 0 || snapshot > max || !Number.isSafeInteger(cursor) || cursor < 1 || cursor > snapshot + 1) throw new ExternalRuntimeError('Invalid directive-history snapshot or cursor.');
+    const total = Number((this.db.prepare('SELECT COUNT(*) AS count FROM external_directives WHERE destination_id=? AND rowid<=?').get(targetId, snapshot) as {count:number}).count);
+    const offset = Number((this.db.prepare('SELECT COUNT(*) AS count FROM external_directives WHERE destination_id=? AND rowid<=? AND rowid>=?').get(targetId, snapshot, cursor) as {count:number}).count);
+    const rows = this.db.prepare('SELECT rowid AS ledger_seq,* FROM external_directives WHERE destination_id=? AND rowid<=? AND rowid<? ORDER BY rowid DESC LIMIT ?')
+      .all(targetId, snapshot, cursor, EXTERNAL_HISTORY_PAGE_SIZE + 1) as Array<Record<string, unknown>>;
+    const nextBefore = rows.length > EXTERNAL_HISTORY_PAGE_SIZE ? Number(rows[EXTERNAL_HISTORY_PAGE_SIZE - 1]!.ledger_seq) : null;
+    return { directives: rows.slice(0, EXTERNAL_HISTORY_PAGE_SIZE), pageSize: EXTERNAL_HISTORY_PAGE_SIZE, total, offset, through: snapshot, nextBefore };
   }
 }

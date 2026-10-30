@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import { EXTERNAL_HISTORY_PAGE_SIZE, type ExternalRuntime } from './external-runtime.js';
+import type { ExternalRuntime } from './external-runtime.js';
 import { escapeHtml, layout } from './views.js';
 
 function errorPage(message: string) { return layout('External runtime update', `<h1>External runtime update rejected</h1><p class="notice">${escapeHtml(message)}</p><a href="/applications/hello-observatory">Return to Hello Observatory</a>`); }
@@ -29,17 +29,46 @@ export function externalControls(runtime: ExternalRuntime, csrf: string): string
     ${state.unresolved ? '<p class="notice">This directive blocks another change until an operator records a continuation decision against a fresh observed version readback. No receipt or execution success is inferred.</p>' : ''}${state.executionUnknown ? '<p class="notice">Execution outcome remains unknown. Reconciliation records an explicit operator decision against a readback; it does not retry or rewrite the directive or receipt.</p>' : ''}${state.contradictory ? '<p class="notice">The latest valid runtime version observation contradicts the completed directive. The discrepancy is preserved for review.</p>' : ''}${reconciliationNeedsRead ? '<p class="notice">Collect a fresh observed version after this directive and its receipt before recording continuation.</p>' : ''}${failedReceiptNeedsRead ? '<p class="notice">The failed operation needs a separate fresh observation collected after its receipt before another directive.</p>' : ''}
     ${canReconcile ? `<form method="post" action="/external/targets/${encodeURIComponent(target.id)}/reconcile" class="external-control reconciliation-control"><input type="hidden" name="csrf" value="${escapeHtml(csrf)}"><input type="hidden" name="directiveId" value="${escapeHtml(state.directive!.id)}"><h3>Record continuation against this readback</h3><label>Actor <input required maxlength="120" name="actor" autocomplete="name"></label><label>Rationale <textarea required maxlength="1000" name="rationale" rows="3"></textarea></label><button type="submit">Record operator reconciliation</button></form>` : ''}
     ${canChange ? `<div class="external-forms">${form(csrf,target.id,'deploy','Deploy / change version',target.artifacts)}${rollbackOptions.length ? form(csrf,target.id,'rollback','Rollback to retained release',rollbackOptions) : ''}</div>` : ''}
-    <p class="source-note">Artifact identities are private-config allowlisted pairs. Actor and rationale are local declarations, not authenticated organizational standing. Only one unresolved directive is allowed; unknown outcomes are never replayed automatically.</p><h3>Recent directive and event preview</h3>${history || '<p>No external directives or events recorded.</p>'}<p class="source-note">This preview includes at most 10 recent directives and five events per directive. Older retained events are available in the complete paginated ledger.</p><a href="/applications/hello-observatory/history">Open complete external event history →</a></section>`;
+    <p class="source-note">Artifact identities are private-config allowlisted pairs. Actor and rationale are local declarations, not authenticated organizational standing. Only one unresolved directive is allowed; unknown outcomes are never replayed automatically.</p><h3>Recent directive and event preview</h3>${history || '<p>No external directives or events recorded.</p>'}<p class="source-note">This preview includes at most 10 recent directives and five events per directive.</p><p><a href="/applications/hello-observatory/directives">Open complete directive ledger →</a> · <a href="/applications/hello-observatory/history">Open complete external event history →</a></p></section>`;
 }
 
-function historyPage(runtime: ExternalRuntime, page: number) {
-  const ledger = runtime.historyPage(runtime.target.id, page);
-  const first = ledger.total === 0 ? 0 : (page - 1) * EXTERNAL_HISTORY_PAGE_SIZE + 1;
-  const last = Math.min(page * EXTERNAL_HISTORY_PAGE_SIZE, ledger.total);
-  const rows = ledger.events.map((event) => `<li><h2>${escapeHtml(event.kind)} · ${escapeHtml(event.outcome)}</h2><p>${escapeHtml(event.eventId)} · ${escapeHtml(event.recordedAt)}</p><pre>${escapeHtml(JSON.stringify(event, null, 2))}</pre></li>`).join('');
-  const navigation = `${page > 1 ? `<a rel="prev" href="?page=${page - 1}">← Newer events</a>` : '<span>Newest events</span>'} · Page ${page} of ${Math.max(ledger.pageCount, 1)} · records ${first}–${last} of ${ledger.total} · ${ledger.pageSize} per page${page < ledger.pageCount ? ` · <a rel="next" href="?page=${page + 1}">Older events →</a>` : ' · Oldest events'}`;
+function readCursor(request: { raw: { url?: string } }, allowed: string[]) {
+  const url = new URL(request.raw.url ?? '/', 'http://localhost');
+  const entries = [...url.searchParams.entries()];
+  if (entries.some(([key]) => !allowed.includes(key)) || new Set(entries.map(([key]) => key)).size !== entries.length) throw new Error('Unsupported or repeated history query fields.');
+  const read = (key: string): number | undefined => {
+    const raw = url.searchParams.get(key);
+    if (raw === null) return undefined;
+    if (!/^(?:0|[1-9][0-9]{0,15})$/.test(raw)) throw new Error(`Invalid ${key} cursor.`);
+    const value = Number(raw);
+    if (!Number.isSafeInteger(value)) throw new Error(`Invalid ${key} cursor.`);
+    return value;
+  };
+  const through = read('through'); const before = read('before');
+  if ((through === undefined) !== (before === undefined)) throw new Error('Both snapshot and cursor are required together.');
+  return { through, before };
+}
+function cursorLinks(path: string, through: number, nextBefore: number | null, label: string) {
+  return `<a href="${path}">Refresh latest snapshot</a>${nextBefore === null ? ` · Oldest ${label}` : ` · <a rel="next" href="${path}?through=${through}&amp;before=${nextBefore}">Older ${label} →</a>`}`;
+}
+function historyPage(runtime: ExternalRuntime, through?: number, before?: number) {
+  const ledger = runtime.historyPage(runtime.target.id, through, before);
+  const first = ledger.total === 0 ? 0 : ledger.offset + 1;
+  const last = ledger.offset + ledger.events.length;
+  const rows = ledger.events.map((event) => `<li><h2>${escapeHtml(event.kind)} · ${escapeHtml(event.outcome)}</h2><p>${escapeHtml(event.eventId)} · ${escapeHtml(event.recordedAt)}</p>${event.directiveId ? `<p><a href="/applications/hello-observatory/directives#directive-${encodeURIComponent(event.directiveId)}">Inspect associated directive</a></p>` : ''}<pre>${escapeHtml(JSON.stringify(event, null, 2))}</pre></li>`).join('');
+  const navigation = `Records ${first}–${last} of ${ledger.total} in snapshot ${ledger.through} · ${ledger.pageSize} per page · ${cursorLinks('/applications/hello-observatory/history', ledger.through, ledger.nextBefore, 'events')}`;
   const scopeLabel = ledger.total > ledger.pageSize ? `This page is partial; all ${ledger.total} retained events are counted across the ledger.` : `This page contains the full retained event ledger (${ledger.total} event${ledger.total === 1 ? '' : 's'}).`;
-  return layout('External event history', `<nav class="breadcrumbs"><a href="/applications/hello-observatory">Hello Observatory</a> / External event history</nav><h1>External event history</h1><p>This read-only page shows the retained event ledger in fixed pages of ${ledger.pageSize}. Opening it does not observe a target, create a record or dispatch a directive. ${scopeLabel}</p><p>${navigation}</p><ol class="activity-list">${rows || '<li>No external events recorded.</li>'}</ol><p>${navigation}</p><a href="/applications/hello-observatory#external-runtime">Return to Hello Observatory →</a>`);
+  return layout('External event history', `<nav class="breadcrumbs"><a href="/applications/hello-observatory">Hello Observatory</a> / External event history</nav><h1>External event history</h1><p>This read-only page shows a stable snapshot of the retained event ledger in fixed pages of ${ledger.pageSize}. New events are excluded from this traversal. Opening it does not observe a target, create a record or dispatch a directive. ${scopeLabel}</p><p>${navigation}</p><ol class="activity-list">${rows || '<li>No external events recorded.</li>'}</ol><p>${navigation}</p><a href="/applications/hello-observatory/directives">Open complete directive ledger →</a> · <a href="/applications/hello-observatory#external-runtime">Return to Hello Observatory →</a>`);
+}
+function directivePage(runtime: ExternalRuntime, through?: number, before?: number) {
+  const ledger = runtime.directivePage(runtime.target.id, through, before);
+  const first = ledger.total === 0 ? 0 : ledger.offset + 1;
+  const last = ledger.offset + ledger.directives.length;
+  const rows = ledger.directives.map((row) => `<li id="directive-${escapeHtml(String(row.id))}"><h2>${escapeHtml(String(row.action))} ${escapeHtml(String(row.version))}</h2><dl><dt>ID</dt><dd>${escapeHtml(String(row.id))}</dd><dt>Backend</dt><dd>${escapeHtml(String(row.backend_id))}</dd><dt>Application</dt><dd>${escapeHtml(String(row.application_id))}</dd><dt>Destination</dt><dd>${escapeHtml(String(row.destination_id))}</dd><dt>Instance</dt><dd>${escapeHtml(String(row.instance_id))}</dd><dt>Created</dt><dd>${escapeHtml(String(row.created_at))}</dd><dt>Artifact</dt><dd>${escapeHtml(String(row.artifact_id))}</dd><dt>Expected boot ID</dt><dd>${escapeHtml(String(row.expected_boot_id ?? 'None recorded'))}</dd><dt>Actor</dt><dd>${escapeHtml(String(row.actor))}</dd><dt>Rationale</dt><dd>${escapeHtml(String(row.rationale))}</dd></dl><a href="/applications/hello-observatory/history">Inspect retained event history</a></li>`).join('');
+  const path = '/applications/hello-observatory/directives';
+  const navigation = `Records ${first}–${last} of ${ledger.total} in snapshot ${ledger.through} · ${ledger.pageSize} per page · ${cursorLinks(path, ledger.through, ledger.nextBefore, 'directives')}`;
+  const scopeLabel = ledger.total > ledger.pageSize ? `This page is partial; all ${ledger.total} retained directives are counted across the ledger.` : `This page contains the full retained directive ledger (${ledger.total} directive${ledger.total === 1 ? '' : 's'}).`;
+  return layout('External directive ledger', `<nav class="breadcrumbs"><a href="/applications/hello-observatory">Hello Observatory</a> / External directive ledger</nav><h1>External directive ledger</h1><p>This read-only page shows all retained directives, including directives with no events, in stable fixed pages of ${ledger.pageSize}. New directives are excluded from this traversal. Opening it does not observe a target, create a record or dispatch a directive. ${scopeLabel}</p><p>${navigation}</p><ol class="activity-list">${rows || '<li>No external directives recorded.</li>'}</ol><p>${navigation}</p><a href="/applications/hello-observatory/history">Open complete external event history →</a> · <a href="/applications/hello-observatory#external-runtime">Return to Hello Observatory →</a>`);
 }
 
 export function externalRuntimeRoutes(app: FastifyInstance, runtime: ExternalRuntime, csrf: string) {
@@ -53,12 +82,12 @@ export function externalRuntimeRoutes(app: FastifyInstance, runtime: ExternalRun
     catch (error) { return reply.code((error as {statusCode?:number}).statusCode ?? 404).send({error:'unknown_target'}); }
   });
   app.get('/applications/hello-observatory/history', async (request, reply) => {
-    const raw = (request.query as Record<string, unknown>).page;
-    if (raw !== undefined && (typeof raw !== 'string' || !/^[1-9][0-9]{0,8}$/.test(raw))) return reply.code(400).type('text/html').send(errorPage('History page must be a positive page number.'));
-    const page = raw === undefined ? 1 : Number(raw);
-    if (!Number.isSafeInteger(page)) return reply.code(400).type('text/html').send(errorPage('History page must be a positive safe integer.'));
-    try { return reply.type('text/html').send(historyPage(runtime, page)); }
+    try { const cursor = readCursor(request, ['through','before']); return reply.type('text/html').send(historyPage(runtime, cursor.through, cursor.before)); }
     catch (error) { return reply.code((error as {statusCode?:number}).statusCode ?? 400).type('text/html').send(errorPage(error instanceof Error ? error.message : 'History page unavailable.')); }
+  });
+  app.get('/applications/hello-observatory/directives', async (request, reply) => {
+    try { const cursor = readCursor(request, ['through','before']); return reply.type('text/html').send(directivePage(runtime, cursor.through, cursor.before)); }
+    catch (error) { return reply.code((error as {statusCode?:number}).statusCode ?? 400).type('text/html').send(errorPage(error instanceof Error ? error.message : 'Directive page unavailable.')); }
   });
   app.post<{Params:{targetId:string};Body:unknown}>('/api/runtime/v1/targets/:targetId/events', async (request, reply) => {
     try { return reply.send(runtime.ingest(request.params.targetId, request.body)); }
