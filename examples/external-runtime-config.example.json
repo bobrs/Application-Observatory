@@ -9,7 +9,7 @@
       "purpose": "Accepted reference application"
     },
     {
-      "id": "aloha-reference",
+      "id": "observatory-aloha-reference",
       "slug": "aloha-observatory",
       "name": "Aloha Observatory",
       "purpose": "Example second application; metadata alone does not establish operational state."
@@ -30,7 +30,7 @@
     {
       "id": "x01-aloha-qa",
       "name": "Aloha Observatory · QA",
-      "applicationId": "aloha-reference",
+      "applicationId": "observatory-aloha-reference",
       "stage": "QA",
       "instanceId": "replace-with-another-configured-incarnation",
       "mode": "observe-only",
@@ -42,7 +42,7 @@
     {
       "id": "x01-aloha-demo-planned",
       "name": "Aloha Observatory · Demo",
-      "applicationId": "aloha-reference",
+      "applicationId": "observatory-aloha-reference",
       "stage": "Demo",
       "instanceId": "replace-with-planned-identity",
       "mode": "planned",

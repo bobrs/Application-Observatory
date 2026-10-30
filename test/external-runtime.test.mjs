@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { chmodSync, mkdtempSync, rmSync, writeFileSync, symlinkSync } from 'node:fs';
+import { chmodSync, mkdtempSync, rmSync, writeFileSync, symlinkSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createApplication } from '../dist/app.js';
@@ -45,21 +45,41 @@ test('external configuration is private, bounded, and identities come from opera
   const oversized=join(directory,'oversized.json'); writeFileSync(oversized,' '.repeat(65_537),{mode:0o600}); chmodSync(oversized,0o600); assert.throws(()=>readExternalConfig(oversized,token),/64 KiB/);
 });
 
+test('accepted Aloha example identity is valid, ingestible, and hello slug is reserved', (t) => {
+  const example = validateConfig(JSON.parse(readFileSync(new URL('../examples/external-runtime-config.example.json', import.meta.url), 'utf8')));
+  const alohaTarget = example.targets.find((target) => target.id === 'x01-aloha-qa');
+  assert.equal(alohaTarget.applicationId, 'observatory-aloha-reference');
+  const directory = mkdtempSync(join(tmpdir(), 'ao-external-example-')); t.after(() => rmSync(directory, { recursive: true, force: true }));
+  const catalog = openCatalog(join(directory, 'db')); t.after(() => catalog.close());
+  const runtime = new ExternalRuntime(catalog.db, example, token);
+  const artifact = alohaTarget.artifacts[0];
+  const event = { schemaVersion: 1, eventId: 'example-aloha-observation', backendId: example.backendId,
+    applicationId: 'observatory-aloha-reference', destinationId: alohaTarget.id, instanceId: alohaTarget.instanceId,
+    directiveId: null, kind: 'observation', source: 'example configured collector', detail: 'accepted app identity',
+    outcome: 'observed', observedAt: nowIso(), version: artifact.version, artifactId: artifact.artifactId, bootId: 'example-aloha-boot' };
+  assert.deepEqual(runtime.ingest(alohaTarget.id, event), { schemaVersion: 1, accepted: true, duplicate: false });
+  const apps = example.applications;
+  assert.throws(() => validateConfig({ ...JSON.parse(readFileSync(new URL('../examples/external-runtime-config.example.json', import.meta.url), 'utf8')),
+    applications: apps.map((application) => application.id === 'observatory-aloha-reference' ? { ...application, slug: 'hello-observatory' } : application) }), /reserved/);
+  assert.throws(() => validateConfig({ ...JSON.parse(readFileSync(new URL('../examples/external-runtime-config.example.json', import.meta.url), 'utf8')),
+    applications: [...apps, { id: 'another-hello-app', slug: 'hello-observatory', name: 'Another Hello', purpose: 'Must not take the canonical route.' }] }), /reserved/);
+});
+
 test('multi-application targets isolate evidence, enforce declared modes and render scoped bounded routes', async (t) => {
   const multi = {
     schemaVersion: 1, backendId: 'private-backend',
     applications: [
       { id: 'observatory-hello-reference', slug: 'hello-observatory', name: 'Hello Observatory', purpose: 'Accepted reference app' },
-      { id: 'aloha-reference', slug: 'aloha-observatory', name: 'Aloha Observatory', purpose: 'Second configured app <safe>' },
+      { id: 'observatory-aloha-reference', slug: 'aloha-observatory', name: 'Aloha Observatory', purpose: 'Second configured app <safe>' },
     ],
     targets: [
       { ...config.targets[0], id: 'hello-managed', name: 'Hello Test', instanceId: 'hello-test-instance' },
       { ...config.targets[0], id: 'hello-managed-2', name: 'Hello Test Canary', instanceId: 'hello-canary-instance' },
       { ...config.targets[0], id: 'hello-observe', name: 'Hello QA', stage: 'QA', instanceId: 'hello-qa-instance', mode: 'observe-only', limitations: 'Runtime self-report & local collector only.' },
-      { ...config.targets[0], id: 'aloha-qa', name: 'Aloha QA', applicationId: 'aloha-reference', stage: 'QA', instanceId: 'aloha-qa-instance', mode: 'observe-only' },
-      { ...config.targets[0], id: 'aloha-qa-stale', name: 'Aloha QA Canary', applicationId: 'aloha-reference', stage: 'QA', instanceId: 'aloha-qa-canary-instance', mode: 'observe-only' },
-      { ...config.targets[0], id: 'aloha-demo-runtime', name: 'Aloha Demo Runtime', applicationId: 'aloha-reference', stage: 'Demo', instanceId: 'aloha-demo-runtime-instance', mode: 'observe-only' },
-      { ...config.targets[0], id: 'aloha-demo', name: 'Aloha Demo', applicationId: 'aloha-reference', stage: 'Demo', instanceId: 'aloha-demo-instance', mode: 'planned', artifacts: [], limitations: 'Metadata only <script>safe</script>.' },
+      { ...config.targets[0], id: 'aloha-qa', name: 'Aloha QA', applicationId: 'observatory-aloha-reference', stage: 'QA', instanceId: 'aloha-qa-instance', mode: 'observe-only' },
+      { ...config.targets[0], id: 'aloha-qa-stale', name: 'Aloha QA Canary', applicationId: 'observatory-aloha-reference', stage: 'QA', instanceId: 'aloha-qa-canary-instance', mode: 'observe-only' },
+      { ...config.targets[0], id: 'aloha-demo-runtime', name: 'Aloha Demo Runtime', applicationId: 'observatory-aloha-reference', stage: 'Demo', instanceId: 'aloha-demo-runtime-instance', mode: 'observe-only' },
+      { ...config.targets[0], id: 'aloha-demo', name: 'Aloha Demo', applicationId: 'observatory-aloha-reference', stage: 'Demo', instanceId: 'aloha-demo-instance', mode: 'planned', artifacts: [], limitations: 'Metadata only <script>safe</script>.' },
     ],
   };
   const normalized = validateConfig(multi);
@@ -81,8 +101,8 @@ test('multi-application targets isolate evidence, enforce declared modes and ren
   const at = nowIso();
   const observationFor = (targetId, applicationId, instanceId, eventId) => ({ schemaVersion: 1, eventId, backendId: 'private-backend', applicationId, destinationId: targetId, instanceId, directiveId: null, kind: 'observation', source: 'bounded collector', detail: 'self-reported version', outcome: 'observed', observedAt: at, version: '1.0.0', artifactId: ids.a, bootId: `boot-${eventId}` });
   const helloEvent = observationFor('hello-observe', 'observatory-hello-reference', 'hello-qa-instance', 'hello-observed');
-  const alohaEvent = observationFor('aloha-qa', 'aloha-reference', 'aloha-qa-instance', 'aloha-observed');
-  const alohaStale = { ...observationFor('aloha-qa-stale', 'aloha-reference', 'aloha-qa-canary-instance', 'aloha-stale'), observedAt: new Date(Date.now() - 400_000).toISOString() };
+  const alohaEvent = observationFor('aloha-qa', 'observatory-aloha-reference', 'aloha-qa-instance', 'aloha-observed');
+  const alohaStale = { ...observationFor('aloha-qa-stale', 'observatory-aloha-reference', 'aloha-qa-canary-instance', 'aloha-stale'), observedAt: new Date(Date.now() - 400_000).toISOString() };
   const helloFresh = observationFor('hello-managed-2', 'observatory-hello-reference', 'hello-canary-instance', 'hello-canary-observed');
   assert.equal((await app.inject({ method: 'POST', url: '/api/runtime/v1/targets/hello-observe/events', headers: { ...auth, 'content-type': 'application/json' }, payload: helloEvent })).statusCode, 200);
   assert.equal((await app.inject({ method: 'POST', url: '/api/runtime/v1/targets/aloha-qa/events', headers: { ...auth, 'content-type': 'application/json' }, payload: alohaEvent })).statusCode, 200);
@@ -91,7 +111,7 @@ test('multi-application targets isolate evidence, enforce declared modes and ren
   const wrongTarget = await app.inject({ method: 'POST', url: '/api/runtime/v1/targets/aloha-qa/events', headers: { ...auth, 'content-type': 'application/json' }, payload: { ...helloEvent, eventId: 'wrong-app-event' } });
   assert.equal(wrongTarget.statusCode, 400);
   assert.equal((await app.inject({ url: '/api/runtime/v1/targets/aloha-demo/directive', headers: auth })).statusCode, 404);
-  assert.equal((await app.inject({ url: '/applications/aloha-observatory/targets/aloha-demo/history' })).statusCode, 404);
+  assert.equal((await app.inject({ url: '/applications/aloha-observatory/targets/aloha-demo/history' })).statusCode, 200, 'planned targets keep read-only archives available without gaining a runtime interface');
   assert.equal((await app.inject({ url: '/applications/aloha-observatory/targets/hello-observe/history' })).statusCode, 404);
   const helloPage = await app.inject('/applications/hello-observatory');
   const helloCsrf = helloPage.body.match(/name="csrf" value="([a-f0-9]+)"/)?.[1]; assert.ok(helloCsrf);
@@ -117,6 +137,90 @@ test('multi-application targets isolate evidence, enforce declared modes and ren
   const deniedReceipt = await app.inject({ method: 'POST', url: '/api/runtime/v1/targets/hello-observe/events', headers: { ...auth, 'content-type': 'application/json' }, payload: observeReceipt });
   assert.equal(deniedReceipt.statusCode, 409);
   const db = openCatalog(join(directory, 'db')); assert.equal(db.db.prepare("SELECT COUNT(*) AS n FROM external_events WHERE destination_id='aloha-demo'").get().n, 0); db.close();
+});
+
+test('replacement backend or incarnation cannot inherit live state while target archive remains exact and scoped', async (t) => {
+  const directory = mkdtempSync(join(tmpdir(), 'ao-external-replacement-')); t.after(() => rmSync(directory, { recursive: true, force: true }));
+  const dbPath = join(directory, 'db'); const catalog = openCatalog(dbPath);
+  const at = nowIso(); const targetId = 'private-target'; const applicationId = 'observatory-hello-reference';
+  const directive = { id: 'old-directive-001', backend_id: 'private-backend', application_id: applicationId, destination_id: targetId,
+    instance_id: 'private-incarnation', action: 'deploy', version: '1.0.0', artifact_id: ids.a, created_at: at,
+    expected_boot_id: null, actor: 'Old operator', rationale: 'Retained before replacement' };
+  catalog.db.prepare('INSERT INTO external_directives (id,backend_id,application_id,destination_id,instance_id,action,version,artifact_id,created_at,expected_boot_id,actor,rationale) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)')
+    .run(directive.id, directive.backend_id, directive.application_id, directive.destination_id, directive.instance_id, directive.action, directive.version, directive.artifact_id, directive.created_at, directive.expected_boot_id, directive.actor, directive.rationale);
+  const historyRows = [
+    { schemaVersion: 1, eventId: 'old-observation-001', backendId: 'private-backend', applicationId, destinationId: targetId, instanceId: 'private-incarnation', directiveId: directive.id, kind: 'observation', source: 'old collector', detail: 'old observed version', outcome: 'observed', observedAt: at, version: '1.0.0', artifactId: ids.a, bootId: 'old-boot' },
+    { schemaVersion: 1, eventId: 'old-unknown-receipt-001', backendId: 'private-backend', applicationId, destinationId: targetId, instanceId: 'private-incarnation', directiveId: directive.id, kind: 'receipt', source: 'old client', detail: 'receipt was not received', outcome: 'unknown', artifactId: ids.a, startedAt: at, finishedAt: at },
+    { schemaVersion: 1, eventId: 'old-reconciliation-001', backendId: 'private-backend', applicationId, destinationId: targetId, instanceId: 'private-incarnation', directiveId: directive.id, kind: 'reconciliation', source: 'Local operator reconciliation', detail: 'old explicit continuation', outcome: 'acknowledged', actor: 'Old operator', rationale: 'Old explicit continuation', witnessEventId: 'old-observation-001', observedAt: at, version: '1.0.0', artifactId: ids.a, bootId: 'old-boot', witnessReceiptEventId: 'old-unknown-receipt-001', witnessReceiptOutcome: 'unknown', recordedAt: at },
+  ];
+  const insertEvent = catalog.db.prepare('INSERT INTO external_events (event_id,backend_id,application_id,destination_id,instance_id,directive_id,kind,source,detail,outcome,version,artifact_id,boot_id,observed_at,started_at,finished_at,recorded_at,payload_json) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)');
+  for (const event of historyRows) {
+    const raw = JSON.stringify(event);
+    insertEvent.run(event.eventId, event.backendId, event.applicationId, event.destinationId, event.instanceId, event.directiveId, event.kind, event.source, event.detail, event.outcome,
+      event.version ?? null, event.artifactId ?? null, event.bootId ?? null, event.observedAt ?? null, event.startedAt ?? null, event.finishedAt ?? null, event.recordedAt ?? at, raw);
+  }
+  const foreignEvents = [
+    { ...historyRows[0], eventId: 'other-application-secret', applicationId: 'observatory-aloha-reference' },
+    { ...historyRows[0], eventId: 'other-target-secret', destinationId: 'another-target' },
+  ];
+  for (const event of foreignEvents) insertEvent.run(event.eventId, event.backendId, event.applicationId, event.destinationId, event.instanceId, event.directiveId, event.kind, event.source, event.detail, event.outcome, event.version, event.artifactId, event.bootId, event.observedAt, null, null, at, JSON.stringify(event));
+  const originalPayloads = catalog.db.prepare('SELECT event_id,payload_json FROM external_events WHERE destination_id=? AND application_id=? ORDER BY seq').all(targetId, applicationId);
+  const originalDirective = catalog.db.prepare('SELECT * FROM external_directives WHERE id=?').get(directive.id);
+  catalog.close();
+
+  const cases = [
+    { name: 'new instance', backendId: 'private-backend', instanceId: 'replacement-incarnation', mode: 'managed' },
+    { name: 'new backend', backendId: 'replacement-backend', instanceId: 'private-incarnation', mode: 'managed' },
+    { name: 'planned mode after replacement', backendId: 'replacement-backend', instanceId: 'replacement-incarnation', mode: 'planned' },
+  ];
+  for (const replacement of cases) {
+    const appConfig = { schemaVersion: 1, backendId: replacement.backendId,
+      applications: [{ id: applicationId, slug: 'hello-observatory', name: 'Hello Observatory', purpose: 'Accepted reference application' }],
+      targets: [{ id: targetId, name: 'Hello Test', applicationId, stage: 'Test', instanceId: replacement.instanceId,
+        mode: replacement.mode, artifacts: replacement.mode === 'planned' ? [] : [{ version: '1.0.0', artifactId: ids.a }, { version: '1.1.0', artifactId: ids.b }] }] };
+    const app = createApplication(dbPath, undefined, { config: appConfig, token }); let closed = false;
+    const close = async () => { if (!closed) { closed = true; await app.close(); } }; t.after(close);
+    const api = await app.inject({ url: `/api/runtime/v1/targets/${targetId}/directive`, headers: auth });
+    if (replacement.mode === 'planned') assert.equal(api.statusCode, 404);
+    else assert.deepEqual(api.json(), { schemaVersion: 1, directive: null });
+    const detail = await app.inject('/applications/hello-observatory');
+    assert.equal(detail.statusCode, 200);
+    if (replacement.mode === 'planned') assert.match(detail.body, /No valid version observed yet/);
+    else assert.match(detail.body, /No observation received\./);
+    assert.doesNotMatch(detail.body, /Rollback to retained release/);
+    if (replacement.mode !== 'planned') {
+      const observed = { ...observation(`replacement-observation-${replacement.name.replaceAll(' ', '-')}`), backendId: replacement.backendId,
+        instanceId: replacement.instanceId, directiveId: directive.id };
+      const receiptEvent = { ...receipt(`replacement-receipt-${replacement.name.replaceAll(' ', '-')}`, directive.id, ids.a, 'unknown'), backendId: replacement.backendId, instanceId: replacement.instanceId };
+      assert.equal((await app.inject({ method: 'POST', url: `/api/runtime/v1/targets/${targetId}/events`, headers: { ...auth, 'content-type': 'application/json' }, payload: observed })).statusCode, 409,
+        `${replacement.name}: observation must not correlate to an archived directive`);
+      assert.equal((await app.inject({ method: 'POST', url: `/api/runtime/v1/targets/${targetId}/events`, headers: { ...auth, 'content-type': 'application/json' }, payload: receiptEvent })).statusCode, 409,
+        `${replacement.name}: receipt must not correlate to an archived directive`);
+    }
+    const history = await app.inject(`/applications/hello-observatory/targets/${targetId}/history`);
+    assert.equal(history.statusCode, 200); assert.match(history.body, /across all retained backends and instances/);
+    for (const event of historyRows) assert.ok(history.body.includes(event.eventId), `${replacement.name}: archive should retain ${event.eventId}`);
+    assert.doesNotMatch(history.body, /other-application-secret|other-target-secret/);
+    assert.match(history.body, /private-backend/); assert.match(history.body, /private-incarnation/);
+    const lookup = await app.inject(`/applications/hello-observatory/targets/${targetId}/directives?through=0&before=1&lookup=${directive.id}`);
+    assert.equal(lookup.statusCode, 200); assert.match(lookup.body, /Associated historical directive/); assert.match(lookup.body, /Original backend private-backend · instance private-incarnation/);
+    assert.match(lookup.body, /old-directive-001/); assert.match(lookup.body, /Retained before replacement/);
+    assert.equal((await app.inject(`/applications/hello-observatory/targets/${targetId}/directives?lookup=${'x'.repeat(121)}`)).statusCode, 400);
+    const reopened = openCatalog(dbPath);
+    assert.deepEqual(reopened.db.prepare('SELECT event_id,payload_json FROM external_events WHERE destination_id=? AND application_id=? ORDER BY seq').all(targetId, applicationId), originalPayloads,
+      `${replacement.name}: archive reads must not rewrite retained event bytes`);
+    assert.deepEqual(reopened.db.prepare('SELECT * FROM external_directives WHERE id=?').get(directive.id), originalDirective,
+      `${replacement.name}: archive reads must not rewrite retained directive row`);
+    reopened.close();
+    if (replacement.mode !== 'planned') {
+      const csrf = detail.body.match(/name="csrf" value="([a-f0-9]+)"/)?.[1]; assert.ok(csrf);
+      const freshDirective = await app.inject({ method: 'POST', url: `/external/targets/${targetId}/directives`,
+        headers: { origin: 'http://localhost:4310', host: 'localhost:4310', 'content-type': 'application/x-www-form-urlencoded' },
+        payload: new URLSearchParams({ csrf, action: 'deploy', release: `1.0.0|${ids.a}`, actor: 'New operator', rationale: 'New scope starts independently' }).toString() });
+      assert.equal(freshDirective.statusCode, 303, `${replacement.name}: archived unresolved evidence must not block a fresh directive`);
+    }
+    await close();
+  }
 });
 
 test('large external ledgers render bounded previews, retain full chronology and expose safe read-only pages', async (t) => {
