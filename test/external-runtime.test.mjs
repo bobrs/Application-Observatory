@@ -182,6 +182,11 @@ test('unknown and missing receipts need an explicit witnessed continuation befor
       await new Promise((resolve)=>setTimeout(resolve,4));
       assert.equal((await postEvent(app,observation('read-after-late-receipt',ids.a,'1.0.0','boot-observed',{directiveId:d1.id}))).statusCode,200);
       assert.equal((await postReconcile(new URLSearchParams({csrf,directiveId:d1.id,actor:'Operator',rationale:'Reconcile after late receipt'}))).statusCode,303);
+    } else {
+      const priorFinish=new Date(Date.parse(observed.observedAt)-100).toISOString();
+      assert.equal((await postEvent(app,receipt('repeat-unknown-receipt',d1.id,ids.a,'unknown',{startedAt:priorFinish,finishedAt:priorFinish}))).statusCode,200);
+      assert.match((await app.inject('/applications/hello-observatory')).body,/reconciliation required/);
+      assert.equal((await postReconcile(new URLSearchParams({csrf,directiveId:d1.id,actor:'Operator',rationale:'Acknowledge the latest receipt event'}))).statusCode,303);
     }
     await new Promise((resolve)=>setTimeout(resolve,4));
     assert.equal((await postEvent(app,observation(`benign-refresh-${receiptMode}`,ids.a,'1.0.0','boot-observed',{directiveId:d1.id}))).statusCode,200);

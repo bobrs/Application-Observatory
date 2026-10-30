@@ -231,7 +231,7 @@ export class ExternalRuntime {
     const reconciliation = reconciliationRow ? { ...JSON.parse(reconciliationRow.payload_json), recordedAt: reconciliationRow.recorded_at } as ReconciliationRecord : null;
     const reconciled = !!(reconciliation && observation?.kind === 'observation' && observation.outcome === 'observed' && fresh
       && observation.instanceId === reconciliation.instanceId && observation.bootId === reconciliation.bootId && observation.artifactId === reconciliation.artifactId && observation.version === reconciliation.version
-      && (receipt?.kind === 'receipt' ? receipt.directiveId === reconciliation.directiveId && reconciliation.witnessReceiptEventId !== null && receipt.outcome === reconciliation.witnessReceiptOutcome : reconciliation.witnessReceiptEventId === null && reconciliation.witnessReceiptOutcome === null)
+      && (receipt?.kind === 'receipt' ? receipt.directiveId === reconciliation.directiveId && receipt.eventId === reconciliation.witnessReceiptEventId && receipt.outcome === reconciliation.witnessReceiptOutcome : reconciliation.witnessReceiptEventId === null && reconciliation.witnessReceiptOutcome === null)
       && Date.parse(observation.observedAt ?? '') > Date.parse(directive?.createdAt ?? '')
       && (receipt?.kind !== 'receipt' || Date.parse(observation.observedAt ?? '') > Date.parse(receipt.finishedAt ?? '')));
     const executionUnknown = !!directive && (!receipt || receipt.outcome === 'unknown');
