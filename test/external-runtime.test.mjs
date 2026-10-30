@@ -185,7 +185,11 @@ test('replacement backend or incarnation cannot inherit live state while target 
     else assert.deepEqual(api.json(), { schemaVersion: 1, directive: null });
     const detail = await app.inject('/applications/hello-observatory');
     assert.equal(detail.statusCode, 200);
-    if (replacement.mode === 'planned') assert.match(detail.body, /No valid version observed yet/);
+    if (replacement.mode === 'planned') {
+      assert.match(detail.body, /No valid version observed yet/);
+      assert.match(detail.body, /href="\/applications\/hello-observatory\/targets\/private-target\/history"/);
+      assert.match(detail.body, /Inspect retained historical directives/);
+    }
     else assert.match(detail.body, /No observation received\./);
     assert.doesNotMatch(detail.body, /Rollback to retained release/);
     if (replacement.mode !== 'planned') {
