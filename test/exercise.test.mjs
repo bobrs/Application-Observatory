@@ -170,7 +170,7 @@ test('schema 1 migration preserves original self-entry metadata and adds exercis
   assert.equal(catalog.list()[0].purpose, 'Old purpose');
   catalog.close();
   const checked = new Database(join(directory, 'catalog.sqlite'));
-  assert.equal(checked.pragma('user_version', { simple: true }), 3);
+  assert.equal(checked.pragma('user_version', { simple: true }), 4);
   assert.equal(checked.prepare('SELECT count(*) AS n FROM exercise_requests').get().n, 0);
   checked.close();
 });

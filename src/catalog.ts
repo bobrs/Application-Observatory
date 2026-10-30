@@ -5,6 +5,7 @@ import { dataDirectory } from './config.js';
 import { schema, schemaVersion } from './migrations/001-self-catalog.js';
 import { exerciseSchema } from './migrations/002-release-exercise.js';
 import { externalRuntimeSchema } from './migrations/003-external-runtime.js';
+import { externalHistoryIndexesSchema } from './migrations/004-external-history-indexes.js';
 
 export interface Application {
   id: string;
@@ -33,10 +34,11 @@ export function openCatalog(directory?: string) {
     chmodSync(path, 0o600);
     db.transaction(() => {
       const version = db.pragma('user_version', { simple: true }) as number;
-      if (version > 3) throw new Error('Database schema is newer than this application; use the matching source version.');
+      if (version > 4) throw new Error('Database schema is newer than this application; use the matching source version.');
       if (version === 0) db.exec(schema);
       if (version <= schemaVersion) db.exec(exerciseSchema);
       if (version <= 2) db.exec(externalRuntimeSchema);
+      if (version <= 3) db.exec(externalHistoryIndexesSchema);
       db.prepare(`INSERT INTO applications
         (id, name, purpose, stewardship, source_url, source_revision, recorded_at, next_decision, next_decision_source)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO NOTHING`).run(

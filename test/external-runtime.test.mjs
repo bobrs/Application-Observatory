@@ -45,6 +45,136 @@ test('external configuration is private, bounded, and identities come from opera
   const oversized=join(directory,'oversized.json'); writeFileSync(oversized,' '.repeat(65_537),{mode:0o600}); chmodSync(oversized,0o600); assert.throws(()=>readExternalConfig(oversized,token),/64 KiB/);
 });
 
+test('large external ledgers render bounded previews, retain full chronology and expose safe read-only pages', async (t) => {
+  const directory=mkdtempSync(join(tmpdir(),'ao-external-history-')); t.after(()=>rmSync(directory,{recursive:true,force:true}));
+  const configPath=join(directory,'private-config.json'); writeFileSync(configPath,JSON.stringify(config),{mode:0o600}); chmodSync(configPath,0o600);
+  const credentials=readExternalConfig(configPath,token); const catalog=openCatalog(join(directory,'db'));
+  const runtime=new ExternalRuntime(catalog.db,credentials.config,token);
+  const insertEvent=catalog.db.prepare(`INSERT INTO external_events (event_id,backend_id,application_id,destination_id,instance_id,directive_id,kind,source,detail,outcome,version,artifact_id,boot_id,observed_at,started_at,finished_at,recorded_at,payload_json) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`);
+  const base=Date.now()-200_000;
+  for(let i=0;i<1200;i++) {
+    const observedAt=new Date(base+i*100).toISOString(); const artifactId=i===0?ids.a:ids.b; const version=i===0?'1.0.0':'1.1.0';
+    const event={schemaVersion:1,eventId:`observation-${String(i).padStart(4,'0')}`,backendId:'private-backend',applicationId:'observatory-hello-reference',destinationId:'private-target',instanceId:'private-incarnation',directiveId:null,kind:'observation',source:'bounded HTTP GET /version',detail:`retained observation ${i} ${'x'.repeat(90)}`,outcome:'observed',observedAt,version,artifactId,bootId:`boot-${i}`};
+    const recordedAt=observedAt;
+    insertEvent.run(event.eventId,event.backendId,event.applicationId,event.destinationId,event.instanceId,null,event.kind,event.source,event.detail,event.outcome,event.version,event.artifactId,event.bootId,event.observedAt,null,null,recordedAt,JSON.stringify(event));
+  }
+  const insertDirective=catalog.db.prepare('INSERT INTO external_directives (id,backend_id,application_id,destination_id,instance_id,action,version,artifact_id,created_at,expected_boot_id,actor,rationale) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)');
+  insertDirective.run('directive-zero-events','private-backend','observatory-hello-reference','private-target','private-incarnation','rollback','1.0.0',ids.a,new Date(base-1).toISOString(),'expected-old-boot','Zero event operator','This directive has no event rows and remains inspectable.');
+  for(let i=0;i<300;i++) insertDirective.run(`directive-${String(i).padStart(4,'0')}`,'private-backend','observatory-hello-reference','private-target','private-incarnation','deploy','1.1.0',ids.b,new Date(base+i).toISOString(),null,'Operator',`rationale ${i}`);
+  // Latest directive has a failed receipt; a newer fresh observation permits a new action.
+  const latestDirective='directive-0299'; const receiptAt=new Date(base+110_000).toISOString();
+  for(let i=0;i<300;i++) {
+    const at=i===299?receiptAt:new Date(base+1_000+i).toISOString();
+    const receiptEvent={schemaVersion:1,eventId:i===299?'latest-failed-receipt':`receipt-${String(i).padStart(4,'0')}`,backendId:'private-backend',applicationId:'observatory-hello-reference',destinationId:'private-target',instanceId:'private-incarnation',directiveId:`directive-${String(i).padStart(4,'0')}`,kind:'receipt',source:'external client',detail:'failed operation',outcome:'failed',artifactId:ids.b,startedAt:at,finishedAt:at};
+    insertEvent.run(receiptEvent.eventId,receiptEvent.backendId,receiptEvent.applicationId,receiptEvent.destinationId,receiptEvent.instanceId,receiptEvent.directiveId,receiptEvent.kind,receiptEvent.source,receiptEvent.detail,receiptEvent.outcome,null,receiptEvent.artifactId,null,null,receiptEvent.startedAt,receiptEvent.finishedAt,at,JSON.stringify(receiptEvent));
+  }
+  catalog.close();
+  const app=createApplication(join(directory,'db'),undefined,credentials); t.after(()=>app.close());
+
+  const detail=await app.inject('/applications/hello-observatory');
+  assert.equal(detail.statusCode,200); assert.ok(detail.body.length<45_000,`detail HTML was ${detail.body.length} bytes`);
+  assert.match(detail.body,/Recent directive and event preview/); assert.match(detail.body,/at most 10 recent directives and five events per directive/);
+  assert.doesNotMatch(detail.body,/observation-0000/); assert.match(detail.body,/Rollback to retained release/,'rollback eligibility must search the full retained ledger');
+
+  const history=await app.inject('/applications/hello-observatory/history');
+  assert.equal(history.statusCode,200); assert.match(history.body,/Records 1–20 of 1500/); assert.match(history.body,/stable snapshot/); assert.ok(history.body.length<30_000);
+  assert.doesNotMatch(history.body,/<form\b/i,'history reads do not offer dispatch or observation controls');
+  const through=Number(history.body.match(/snapshot (\d+)/)?.[1]); const before=Number(history.body.match(/before=(\d+)/)?.[1]); assert.ok(through>before);
+  let oldPage=history; let foundOld=false;
+  while(!foundOld) {
+    foundOld ||= oldPage.body.includes('observation-0000');
+    if(foundOld) break;
+    const next=oldPage.body.match(/href="\/applications\/hello-observatory\/history\?through=\d+&amp;before=(\d+)"/);
+    assert.ok(next,'older-event navigation should continue to the retained oldest row');
+    oldPage=await app.inject(`/applications/hello-observatory/history?through=${through}&before=${next[1]}`);
+    assert.equal(oldPage.statusCode,200);
+  }
+  assert.ok(foundOld,'old observations must remain navigable');
+  for(const query of ['through=0&before=0','through=-1&before=2','through=1e6&before=1','through=99999999999999999&before=1','through=01&before=1','through=1','page=1','x=1']) {
+    assert.equal((await app.inject(`/applications/hello-observatory/history?${query}`)).statusCode,400,`${query} must be rejected`);
+  }
+  assert.equal((await app.inject('/applications/hello-observatory/history?through=1&through=2&before=1')).statusCode,400);
+  assert.equal((await app.inject({method:'POST',url:'/applications/hello-observatory/history?through=1&before=1'})).statusCode,405);
+  const directives=await app.inject('/applications/hello-observatory/directives');
+  assert.equal(directives.statusCode,200); assert.match(directives.body,/rationale 299/); assert.match(directives.body,/Expected boot ID/);
+  assert.doesNotMatch(directives.body,/<form\b/i,'directive ledger reads do not offer dispatch or observation controls');
+  const dthrough=Number(directives.body.match(/snapshot (\d+)/)?.[1]); const dbefore=Number(directives.body.match(/before=(\d+)/)?.[1]);
+  const emptyDirectivePage=await app.inject(`/applications/hello-observatory/directives?through=${dthrough}&before=2`);
+  assert.ok(emptyDirectivePage.body.includes('This directive has no event rows')); assert.ok(emptyDirectivePage.body.includes('expected-old-boot'));
+  assert.equal((await app.inject('/applications/hello-observatory/directives?through=1&through=2&before=1')).statusCode,400);
+  const verify=openCatalog(join(directory,'db'));
+  assert.equal((verify.db.prepare('SELECT COUNT(*) AS count FROM external_events').get()).count,1500);
+  assert.equal((verify.db.prepare('SELECT COUNT(*) AS count FROM external_directives').get()).count,301);
+  verify.close();
+});
+
+test('mixed-precision ISO chronology selects latest, latest-known and rollback eligibility by milliseconds', (t) => {
+  const directory=mkdtempSync(join(tmpdir(),'ao-external-precision-')); t.after(()=>rmSync(directory,{recursive:true,force:true}));
+  const catalog=openCatalog(join(directory,'db')); t.after(()=>catalog.close());
+  let clock=Date.parse('2026-10-30T12:00:00.900Z'); const runtime=new ExternalRuntime(catalog.db,validateConfig(config),token,()=>new Date(clock));
+  const put=(eventId,outcome,observedAt,artifactId=null,version=null)=>runtime.ingest('private-target',{schemaVersion:1,eventId,backendId:'private-backend',applicationId:'observatory-hello-reference',destinationId:'private-target',instanceId:'private-incarnation',directiveId:null,kind:'observation',source:'bounded HTTP GET /version',detail:'mixed precision test',outcome,observedAt,version,artifactId,bootId:outcome==='observed'?'boot-mixed':null});
+  put('known-millis','observed','2026-10-30T12:00:00.250Z',ids.a,'1.0.0');
+  put('unknown-no-millis','unknown','2026-10-30T12:00:00Z');
+  assert.equal(runtime.state().observation.eventId,'known-millis','.250Z is later than the no-millisecond .000Z timestamp');
+  put('unknown-later','unknown','2026-10-30T12:00:00.500Z');
+  assert.equal(runtime.state().observation.eventId,'unknown-later');
+  assert.equal(runtime.state().lastObservation.eventId,'known-millis','latest known observation excludes the later unknown');
+  put('later-known','observed','2026-10-30T12:00:00.900Z',ids.b,'1.1.0');
+  assert.equal(runtime.state().observation.eventId,'later-known'); assert.equal(runtime.state().lastObservation.eventId,'later-known');
+  put('later-second-no-millis','observed','2026-10-30T12:00:01Z',ids.c,'1.2.0');
+  assert.equal(runtime.state().observation.eventId,'later-second-no-millis');
+  assert.equal(runtime.hasEarlierObservedArtifact('private-target',ids.b,'2026-10-30T12:00:01Z'),true);
+  assert.equal(runtime.hasEarlierObservedArtifact('private-target',ids.c,'2026-10-30T12:00:00.900Z'),false);
+
+  const rollbackCatalog=openCatalog(join(directory,'rollback-db'));
+  const rollbackRuntime=new ExternalRuntime(rollbackCatalog.db,validateConfig(config),token,()=>new Date('2026-10-30T12:00:00.002Z'));
+  const rollbackObservation=(eventId,artifactId,version,observedAt)=>rollbackRuntime.ingest('private-target',{schemaVersion:1,eventId,backendId:'private-backend',applicationId:'observatory-hello-reference',destinationId:'private-target',instanceId:'private-incarnation',directiveId:null,kind:'observation',source:'bounded HTTP GET /version',detail:'rollback precision test',outcome:'observed',observedAt,version,artifactId,bootId:`boot-${eventId}`});
+  rollbackObservation('rollback-older-no-ms',ids.a,'1.0.0','2026-10-30T12:00:00Z');
+  rollbackObservation('rollback-current-millis',ids.b,'1.1.0','2026-10-30T12:00:00.001Z');
+  assert.equal(rollbackRuntime.state().observation.eventId,'rollback-current-millis');
+  assert.equal(rollbackRuntime.state().fresh,true);
+  assert.equal(rollbackRuntime.hasEarlierObservedArtifact('private-target',ids.a,'2026-10-30T12:00:00.001Z'),true);
+  const rollbackDirective=rollbackRuntime.createDirective('private-target',{action:'rollback',version:'1.0.0',artifactId:ids.a,actor:'Operator',rationale:'Chronologically earlier mixed precision artifact'});
+  assert.equal(rollbackDirective.action,'rollback'); rollbackCatalog.close();
+});
+
+test('event and directive keyset traversals remain duplicate-free within their opening snapshots', async (t) => {
+  const {app,directory}=fixture(t); const db=openCatalog(join(directory,'db')); t.after(()=>db.close());
+  const eventInsert=db.db.prepare(`INSERT INTO external_events (event_id,backend_id,application_id,destination_id,instance_id,directive_id,kind,source,detail,outcome,version,artifact_id,boot_id,observed_at,started_at,finished_at,recorded_at,payload_json) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`);
+  const directiveInsert=db.db.prepare('INSERT INTO external_directives (id,backend_id,application_id,destination_id,instance_id,action,version,artifact_id,created_at,expected_boot_id,actor,rationale) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)');
+  for(let i=0;i<45;i++) {
+    const event={schemaVersion:1,eventId:`snapshot-event-${i}`,backendId:'private-backend',applicationId:'observatory-hello-reference',destinationId:'private-target',instanceId:'private-incarnation',directiveId:null,kind:'observation',source:'test',detail:`snap-${i}`,outcome:'unknown',observedAt:'2026-10-30T12:00:00Z',version:null,artifactId:null,bootId:null};
+    eventInsert.run(event.eventId,event.backendId,event.applicationId,event.destinationId,event.instanceId,null,event.kind,event.source,event.detail,event.outcome,null,null,null,event.observedAt,null,null,event.observedAt,JSON.stringify(event));
+    directiveInsert.run(`snapshot-directive-${i}`,'private-backend','observatory-hello-reference','private-target','private-incarnation','deploy','1.0.0',ids.a,`2026-10-30T12:00:${String(i).padStart(2,'0')}Z`,null,'Snapshot operator',`snapshot rationale ${i}`);
+  }
+  const readSnapshot=async (path, marker) => {
+    const seen=[]; const records=[]; let url=path; let snapshot;
+    while(url) {
+      const response=await app.inject(url); assert.equal(response.statusCode,200);
+      const body=response.body; snapshot ??= Number(body.match(/snapshot (\d+)/)?.[1]);
+      const found=path.includes('history')?[...body.matchAll(/<p>snapshot-event-([0-9]+) ·/g)]:[...body.matchAll(/snapshot rationale ([0-9]+)<\/dd>/g)];
+      seen.push(...found.map((match)=>Number(match[1])));
+      records.push(...(path.includes('history')?[...body.matchAll(/<p>(snapshot-event-[0-9]+|appended-event-during-traversal) ·/g)].map((match)=>match[1]):[...body.matchAll(/<li id="directive-([^"]+)">/g)].map((match)=>match[1])));
+      const match=body.match(new RegExp(`${path.includes('history')?'history':'directives'}\\?through=${snapshot}&amp;before=([0-9]+)`));
+      url=match?`${path}?through=${snapshot}&before=${match[1]}`:null;
+      if(seen.length===20) {
+        // Insert after the first page; the fixed upper sequence excludes it from the traversal.
+        const suffix=path.includes('history')?'event':'directive';
+        const event={schemaVersion:1,eventId:`appended-${suffix}-during-traversal`,backendId:'private-backend',applicationId:'observatory-hello-reference',destinationId:'private-target',instanceId:'private-incarnation',directiveId:null,kind:'observation',source:'test',detail:'new-after-snapshot',outcome:'unknown',observedAt:'2026-10-30T12:00:00Z',version:null,artifactId:null,bootId:null};
+        eventInsert.run(event.eventId,event.backendId,event.applicationId,event.destinationId,event.instanceId,null,event.kind,event.source,event.detail,event.outcome,null,null,null,event.observedAt,null,null,event.observedAt,JSON.stringify(event));
+        directiveInsert.run(`appended-${suffix}-during-traversal`,'private-backend','observatory-hello-reference','private-target','private-incarnation','deploy','1.0.0',ids.a,'2026-10-30T12:00:59Z',null,'New operator','new after snapshot');
+      }
+    }
+    return {seen,records};
+  };
+  const events=await readSnapshot('/applications/hello-observatory/history','snapshot-event-');
+  assert.equal(events.seen.length,45); assert.equal(new Set(events.seen).size,45); assert.ok(!events.seen.includes(NaN));
+  assert.equal(events.records.length,45); assert.equal(new Set(events.records).size,45); assert.ok(!events.records.includes('appended-event-during-traversal'));
+  const directives=await readSnapshot('/applications/hello-observatory/directives','snapshot rationale ');
+  assert.equal(directives.seen.length,45); assert.equal(new Set(directives.seen).size,45); assert.ok(!directives.seen.includes(NaN));
+  assert.equal(directives.records.length,46); assert.equal(new Set(directives.records).size,46); assert.ok(directives.records.includes('appended-event-during-traversal')); assert.ok(!directives.records.includes('appended-directive-during-traversal'));
+});
+
 test('bearer auth, strict events, idempotency, correlation and persisted deploy then rollback progression', async (t) => {
   const {app,directory}=fixture(t);
   const unauthorized=await app.inject('/api/runtime/v1/targets/private-target/directive'); assert.equal(unauthorized.statusCode,401);
@@ -204,9 +334,9 @@ test('unknown and missing receipts need an explicit witnessed continuation befor
     const next=await createDirective(app,'deploy',`1.1.0|${ids.b}`,csrf); assert.equal(next.statusCode,303);
     const d2=(await app.inject({url:'/api/runtime/v1/targets/private-target/directive',headers:auth})).json().directive;
     assert.notEqual(d2.id,d1.id); assert.equal(d2.expectedBootId,'boot-recovered');
-    const history=(await app.inject('/applications/hello-observatory')).body; assert.match(history,/witness-missing|witness-unknown/); assert.match(history,/Continue after (missing|unknown) receipt/);
+    const history=(await app.inject('/applications/hello-observatory/history')).body; assert.match(history,/witness-missing|witness-unknown/); assert.match(history,/Continue after (missing|unknown) receipt/);
     await app.close();
     const reopened=createApplication(join(directory,'db'),undefined,readExternalConfig(join(directory,'private-config.json'),token)); t.after(()=>reopened.close());
-    const persisted=(await reopened.inject('/applications/hello-observatory')).body; assert.match(persisted,/witness-missing|witness-unknown/); assert.match(persisted,/Continue after (missing|unknown) receipt/);
+    const persisted=(await reopened.inject('/applications/hello-observatory/history')).body; assert.match(persisted,/witness-missing|witness-unknown/); assert.match(persisted,/Continue after (missing|unknown) receipt/);
   }
 });
