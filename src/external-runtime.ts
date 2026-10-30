@@ -16,10 +16,17 @@ export interface ExternalEvent {
   outcome: 'completed' | 'failed' | 'unknown' | 'observed'; version?: string | null; artifactId?: string | null;
   bootId?: string | null; observedAt?: string; startedAt?: string; finishedAt?: string;
 }
-export interface StoredExternalEvent extends ExternalEvent { recordedAt: string }
+export interface ReconciliationRecord {
+  schemaVersion: 1; eventId: string; backendId: string; applicationId: string; destinationId: string; instanceId: string;
+  directiveId: string; kind: 'reconciliation'; source: string; detail: string; outcome: 'acknowledged';
+  actor: string; rationale: string; witnessEventId: string; observedAt: string; version: string; artifactId: string; bootId: string;
+  witnessReceiptEventId: string | null; witnessReceiptOutcome: 'completed' | 'failed' | 'unknown' | null; recordedAt: string;
+}
+export type StoredExternalEvent = (ExternalEvent & { recordedAt: string }) | (ReconciliationRecord & { recordedAt: string });
 export interface ExternalTargetState {
   target: ExternalTarget; directive: (Directive & { actor: string; rationale: string }) | null;
   receipt: StoredExternalEvent | null; observation: StoredExternalEvent | null; lastObservation: StoredExternalEvent | null;
+  reconciliation: ReconciliationRecord | null; reconciled: boolean; executionUnknown: boolean;
   fresh: boolean; contradictory: boolean; unresolved: boolean; history: Array<{ directive: unknown; events: StoredExternalEvent[] }>;
 }
 
@@ -176,6 +183,32 @@ export class ExternalRuntime {
       .run(event.eventId, event.backendId, event.applicationId, event.destinationId, event.instanceId, event.directiveId, event.kind, event.source, event.detail, event.outcome, version, artifactId, bootId, observedAt, startedAt, finishedAt, recordedAt, canonical(normalized));
     return { schemaVersion: 1, accepted: true, duplicate: false };
   }
+  reconcile(targetId: string, input: { directiveId: unknown; actor: unknown; rationale: unknown }): ReconciliationRecord {
+    const target = this.targetById(targetId);
+    if (!input || typeof input !== 'object' || !exactKeys(input as unknown as Record<string, unknown>, ['directiveId','actor','rationale'])) throw new ExternalRuntimeError('Unsupported reconciliation fields.');
+    const state = this.state(targetId);
+    if (!state.directive || input.directiveId !== state.directive.id) throw new ExternalRuntimeError('Reconciliation must name the latest directive exactly.', 409);
+    if (!state.unresolved) throw new ExternalRuntimeError('This directive does not need reconciliation.', 409);
+    if (state.reconciled) throw new ExternalRuntimeError('This exact observation has already been reconciled.', 409);
+    const witness = state.observation;
+    if (!state.fresh || !witness || witness.kind !== 'observation' || witness.outcome !== 'observed') throw new ExternalRuntimeError('Reconciliation requires a fresh observed version readback.');
+    if (Date.parse(witness.observedAt ?? '') <= Date.parse(state.directive.createdAt)) throw new ExternalRuntimeError('The witness must be collected after the directive was created.');
+    if (state.receipt?.kind === 'receipt' && Date.parse(witness.observedAt ?? '') <= Date.parse(state.receipt.finishedAt ?? '')) throw new ExternalRuntimeError('The witness must be collected after the latest receipt finished.');
+    if (!text(input.actor, 120) || !input.actor.trim() || !text(input.rationale, 1000) || !input.rationale.trim()) throw new ExternalRuntimeError('Enter an actor and rationale for reconciliation.');
+    const recordedAt = this.now().toISOString(); const eventId = randomUUID();
+    const record: ReconciliationRecord = {
+      schemaVersion: 1, eventId, backendId: this.config.backendId, applicationId: target.applicationId, destinationId: target.id,
+      instanceId: target.instanceId, directiveId: state.directive.id, kind: 'reconciliation', source: 'Local operator reconciliation',
+      detail: input.rationale.trim(), outcome: 'acknowledged', actor: input.actor.trim(), rationale: input.rationale.trim(),
+      witnessEventId: witness.eventId, observedAt: witness.observedAt!, version: witness.version!, artifactId: witness.artifactId!, bootId: witness.bootId!, recordedAt,
+      witnessReceiptEventId: state.receipt?.kind === 'receipt' ? state.receipt.eventId : null,
+      witnessReceiptOutcome: state.receipt?.kind === 'receipt' ? state.receipt.outcome as 'completed' | 'failed' | 'unknown' : null,
+    };
+    const { recordedAt: _recordedAt, ...payload } = record;
+    this.db.prepare(`INSERT INTO external_events (event_id,backend_id,application_id,destination_id,instance_id,directive_id,kind,source,detail,outcome,version,artifact_id,boot_id,observed_at,started_at,finished_at,recorded_at,payload_json) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+      .run(eventId, this.config.backendId, target.applicationId, target.id, target.instanceId, state.directive.id, 'reconciliation', record.source, record.detail, 'acknowledged', record.version, record.artifactId, record.bootId, record.observedAt, null, null, recordedAt, canonical(payload));
+    return record;
+  }
   state(targetId = this.target.id): ExternalTargetState {
     const target = this.targetById(targetId); const rawDirective = this.directives(targetId)[0];
     const directive = rawDirective ? { id: String(rawDirective.id), backendId: String(rawDirective.backend_id), applicationId: String(rawDirective.application_id), destinationId: String(rawDirective.destination_id), instanceId: String(rawDirective.instance_id), action: rawDirective.action as Directive['action'], version: String(rawDirective.version), artifactId: String(rawDirective.artifact_id), createdAt: String(rawDirective.created_at), expectedBootId: rawDirective.expected_boot_id === null ? null : String(rawDirective.expected_boot_id), actor: String(rawDirective.actor), rationale: String(rawDirective.rationale) } : null;
@@ -190,14 +223,23 @@ export class ExternalRuntime {
     const fresh = !!observation && observation.outcome === 'observed' && now - Date.parse(observation.observedAt!) <= 300_000 && now - Date.parse(observation.recordedAt) <= 300_000;
     const completed = receipt?.directiveId === directive?.id && receipt?.outcome === 'completed';
     const postDirective = !!known && !!directive && Date.parse(known.observedAt ?? '') >= Date.parse(directive.createdAt);
-    const postReceipt = !!known && !!receipt && Date.parse(known.observedAt ?? '') >= Date.parse(receipt.finishedAt ?? '');
+    const postReceipt = !!known && receipt?.kind === 'receipt' && Date.parse(known.observedAt ?? '') >= Date.parse(receipt.finishedAt ?? '');
     const newBoot = !!known && (!directive?.expectedBootId || known.bootId !== directive.expectedBootId);
     const contradictory = !!(completed && postDirective && postReceipt && known && (known.artifactId !== directive?.artifactId || known.version !== directive?.version || !newBoot));
     const resolved = !!(completed && observation?.outcome === 'observed' && postDirective && postReceipt && newBoot && fresh && !contradictory && known?.artifactId === directive?.artifactId && known?.version === directive?.version);
-    const unresolved = !!directive && (receipt?.directiveId !== directive.id || receipt?.outcome === 'unknown' || (receipt?.outcome === 'completed' && !resolved));
+    const reconciliationRow = directive ? this.db.prepare("SELECT payload_json,recorded_at FROM external_events WHERE destination_id=? AND directive_id=? AND kind='reconciliation' ORDER BY seq DESC LIMIT 1").get(targetId,directive.id) as {payload_json:string;recorded_at:string} | undefined : undefined;
+    const reconciliation = reconciliationRow ? { ...JSON.parse(reconciliationRow.payload_json), recordedAt: reconciliationRow.recorded_at } as ReconciliationRecord : null;
+    const reconciled = !!(reconciliation && observation?.kind === 'observation' && observation.outcome === 'observed' && fresh
+      && observation.instanceId === reconciliation.instanceId && observation.bootId === reconciliation.bootId && observation.artifactId === reconciliation.artifactId && observation.version === reconciliation.version
+      && (receipt?.kind === 'receipt' ? receipt.directiveId === reconciliation.directiveId && reconciliation.witnessReceiptEventId !== null && receipt.outcome === reconciliation.witnessReceiptOutcome : reconciliation.witnessReceiptEventId === null && reconciliation.witnessReceiptOutcome === null)
+      && Date.parse(observation.observedAt ?? '') > Date.parse(directive?.createdAt ?? '')
+      && (receipt?.kind !== 'receipt' || Date.parse(observation.observedAt ?? '') > Date.parse(receipt.finishedAt ?? '')));
+    const executionUnknown = !!directive && (!receipt || receipt.outcome === 'unknown');
+    const baseUnresolved = !!directive && (executionUnknown || (receipt?.outcome === 'completed' && !resolved));
+    const unresolved = baseUnresolved && !reconciled;
     const directives = this.directives(targetId);
     const history = directives.map((d) => ({ directive: d, events: (this.db.prepare('SELECT payload_json,recorded_at FROM external_events WHERE directive_id=? ORDER BY seq').all(d.id) as Array<{payload_json:string;recorded_at:string}>).map((row) => ({ ...JSON.parse(row.payload_json), recordedAt: row.recorded_at }) as StoredExternalEvent) }));
-    return { target, directive, receipt, observation, lastObservation: known, fresh, contradictory, unresolved, history };
+    return { target, directive, receipt, observation, lastObservation: known, reconciliation, reconciled, executionUnknown, fresh, contradictory, unresolved, history };
   }
   events(targetId = this.target.id) { this.targetById(targetId); return (this.db.prepare('SELECT payload_json,recorded_at FROM external_events WHERE destination_id=? ORDER BY seq DESC').all(targetId) as Array<{payload_json:string;recorded_at:string}>).map((row) => ({ ...JSON.parse(row.payload_json), recordedAt: row.recorded_at }) as StoredExternalEvent); }
 }

@@ -118,14 +118,15 @@ export function referenceView(exercise?: Exercise, external?: ExternalRuntime): 
     destinations.push({ id: state.target.id, name: state.target.name, stage: state.target.stage, disposable: false, state: stateName,
       explanation: state.contradictory ? 'Fresh external evidence contradicts the completed directive. Inspect both receipt and observation.' : state.fresh ? 'Fresh externally collected runtime report; this is a version claim, not health or acceptance.' : 'External state is unobserved, unknown or stale. Earlier evidence remains historical.',
       observation: state.fresh ? observation : state.contradictory ? (observation?.outcome === 'observed' ? observation : last) : null, lastKnown: last,
-      ...(state.unresolved && state.directive ? { uncertainRequestId: state.directive.id } : {}),
+      ...((state.executionUnknown || state.unresolved) && state.directive ? { uncertainRequestId: state.directive.id } : {}),
       ...(state.directive ? { recentChange: { text: `${state.directive.action} ${state.directive.version}`, result: String(state.receipt?.outcome ?? 'receipt pending'), decision: `declared by ${state.directive.actor}`, requestId: state.directive.id } } : {}),
       evidence: { backendId: external.config.backendId, target: state.target, desiredDirective: state.directive, receipt: state.receipt, observation: ext, lastKnownObservation: state.lastObservation, history: state.history, fresh: state.fresh, contradictory: state.contradictory, unresolved: state.unresolved } });
     for (const event of external.events()) activity.push({ at: event.recordedAt, text: `${state.target.name}: external ${event.kind} ${event.outcome}${event.version ? ` ${event.version}` : ''}.`, source: `${event.source} — ${event.detail}` });
   }
   const pending = exercise?.reference ? pendingChanges(exercise) : [];
   const needsObservation = destinations.some((destination) => destination.state !== 'Observed');
-  const nextAction = external && destinations.some((item) => item.uncertainRequestId) ? 'Reconcile the external receipt and separately collected observation. Never replay an unknown directive.'
+  const nextAction = external && destinations.some((item) => item.uncertainRequestId) && external.state().reconciled ? 'The execution outcome remains unknown; an operator recorded continuation against a fresh readback. Use the current observed boot for any separate new directive; never replay the old one.'
+    : external && destinations.some((item) => item.uncertainRequestId) ? 'Record an operator continuation decision against a fresh externally collected version observation. Never replay an unknown directive.'
     : external && !destinations.some((item) => item.state === 'Observed') ? 'Wait for the external client to collect a fresh runtime observation; page rendering does not probe the target.'
     : !exercise?.reference && !external ? 'Start a disposable reference session to connect local destinations; no runtime is observed here.'
     : needsObservation ? 'Refresh observations and inspect any unavailable, stale or conflicting destination before proposing another change.'
