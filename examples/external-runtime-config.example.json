@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "backendId": "lab-node-v1",
+  "targets": [
+    {
+      "id": "x01-hello",
+      "name": "Hello Observatory · Test",
+      "applicationId": "observatory-hello-reference",
+      "stage": "Test",
+      "instanceId": "replace-with-configured-incarnation",
+      "artifacts": [
+        { "version": "1.0.0", "artifactId": "sha256:0000000000000000000000000000000000000000000000000000000000000000" },
+        { "version": "1.1.0", "artifactId": "sha256:1111111111111111111111111111111111111111111111111111111111111111" },
+        { "version": "1.2.0", "artifactId": "sha256:2222222222222222222222222222222222222222222222222222222222222222" }
+      ]
+    }
+  ]
+}
