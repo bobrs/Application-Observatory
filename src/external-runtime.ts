@@ -23,6 +23,11 @@ export interface ReconciliationRecord {
   witnessReceiptEventId: string | null; witnessReceiptOutcome: 'completed' | 'failed' | 'unknown' | null; recordedAt: string;
 }
 export type StoredExternalEvent = (ExternalEvent & { recordedAt: string }) | (ReconciliationRecord & { recordedAt: string });
+export const EXTERNAL_RECENT_EVENT_LIMIT = 20;
+export const EXTERNAL_RECENT_DIRECTIVE_LIMIT = 10;
+export const EXTERNAL_DIRECTIVE_EVENT_PREVIEW_LIMIT = 5;
+export const EXTERNAL_HISTORY_PAGE_SIZE = 20;
+export interface ExternalHistoryPage { events: StoredExternalEvent[]; page: number; pageSize: number; total: number; pageCount: number }
 export interface ExternalTargetState {
   target: ExternalTarget; directive: (Directive & { actor: string; rationale: string }) | null;
   receipt: StoredExternalEvent | null; observation: StoredExternalEvent | null; lastObservation: StoredExternalEvent | null;
@@ -104,7 +109,7 @@ export class ExternalRuntime {
     return text(value, max) && !value.includes(this.token) && !/\b(?:authorization|bearer|token|password|secret)\s*[:=]\s*\S/i.test(value);
   }
   private directives(targetId = this.target.id) {
-    return this.db.prepare('SELECT * FROM external_directives WHERE destination_id=? ORDER BY created_at DESC, rowid DESC').all(targetId) as Array<Record<string, unknown>>;
+    return this.db.prepare('SELECT * FROM external_directives WHERE destination_id=? ORDER BY created_at DESC, rowid DESC LIMIT 1').all(targetId) as Array<Record<string, unknown>>;
   }
   directive(targetId = this.target.id): Directive | null {
     this.targetById(targetId);
@@ -214,11 +219,10 @@ export class ExternalRuntime {
     const directive = rawDirective ? { id: String(rawDirective.id), backendId: String(rawDirective.backend_id), applicationId: String(rawDirective.application_id), destinationId: String(rawDirective.destination_id), instanceId: String(rawDirective.instance_id), action: rawDirective.action as Directive['action'], version: String(rawDirective.version), artifactId: String(rawDirective.artifact_id), createdAt: String(rawDirective.created_at), expectedBootId: rawDirective.expected_boot_id === null ? null : String(rawDirective.expected_boot_id), actor: String(rawDirective.actor), rationale: String(rawDirective.rationale) } : null;
     const receiptRow = directive ? this.db.prepare("SELECT payload_json,recorded_at FROM external_events WHERE destination_id=? AND directive_id=? AND kind='receipt' ORDER BY seq DESC LIMIT 1").get(targetId, directive.id) as {payload_json:string;recorded_at:string} | undefined : undefined;
     const receipt = receiptRow ? { ...JSON.parse(receiptRow.payload_json), recordedAt: receiptRow.recorded_at } as StoredExternalEvent : null;
-    const observations = (this.db.prepare("SELECT seq,payload_json,recorded_at FROM external_events WHERE destination_id=? AND kind='observation'").all(targetId) as Array<{seq:number;payload_json:string;recorded_at:string}>)
-      .map((row) => ({ ...JSON.parse(row.payload_json), recordedAt: row.recorded_at, seq: row.seq }) as StoredExternalEvent & {seq:number})
-      .sort((a,b) => Date.parse(b.observedAt ?? '') - Date.parse(a.observedAt ?? '') || b.seq - a.seq);
-    const observation = observations[0] ?? null;
-    const known = observations.find((o) => o.outcome === 'observed') ?? null;
+    const latestObservationRow = this.db.prepare("SELECT payload_json,recorded_at FROM external_events WHERE destination_id=? AND kind='observation' ORDER BY observed_at DESC,seq DESC LIMIT 1").get(targetId) as {payload_json:string;recorded_at:string} | undefined;
+    const latestKnownRow = this.db.prepare("SELECT payload_json,recorded_at FROM external_events WHERE destination_id=? AND kind='observation' AND outcome='observed' ORDER BY observed_at DESC,seq DESC LIMIT 1").get(targetId) as {payload_json:string;recorded_at:string} | undefined;
+    const observation = latestObservationRow ? { ...JSON.parse(latestObservationRow.payload_json), recordedAt: latestObservationRow.recorded_at } as StoredExternalEvent : null;
+    const known = latestKnownRow ? { ...JSON.parse(latestKnownRow.payload_json), recordedAt: latestKnownRow.recorded_at } as StoredExternalEvent : null;
     const now = this.now().getTime();
     const fresh = !!observation && observation.outcome === 'observed' && now - Date.parse(observation.observedAt!) <= 300_000 && now - Date.parse(observation.recordedAt) <= 300_000;
     const completed = receipt?.directiveId === directive?.id && receipt?.outcome === 'completed';
@@ -237,9 +241,24 @@ export class ExternalRuntime {
     const executionUnknown = !!directive && (!receipt || receipt.outcome === 'unknown');
     const baseUnresolved = !!directive && (executionUnknown || (receipt?.outcome === 'completed' && !resolved));
     const unresolved = baseUnresolved && !reconciled;
-    const directives = this.directives(targetId);
-    const history = directives.map((d) => ({ directive: d, events: (this.db.prepare('SELECT payload_json,recorded_at FROM external_events WHERE directive_id=? ORDER BY seq').all(d.id) as Array<{payload_json:string;recorded_at:string}>).map((row) => ({ ...JSON.parse(row.payload_json), recordedAt: row.recorded_at }) as StoredExternalEvent) }));
+    const directives = this.db.prepare('SELECT * FROM external_directives WHERE destination_id=? ORDER BY created_at DESC,rowid DESC LIMIT ?').all(targetId, EXTERNAL_RECENT_DIRECTIVE_LIMIT) as Array<Record<string, unknown>>;
+    const history = directives.map((d) => ({ directive: d, events: (this.db.prepare('SELECT payload_json,recorded_at FROM external_events WHERE directive_id=? ORDER BY seq DESC LIMIT ?').all(d.id, EXTERNAL_DIRECTIVE_EVENT_PREVIEW_LIMIT) as Array<{payload_json:string;recorded_at:string}>).map((row) => ({ ...JSON.parse(row.payload_json), recordedAt: row.recorded_at }) as StoredExternalEvent) }));
     return { target, directive, receipt, observation, lastObservation: known, reconciliation, reconciled, executionUnknown, fresh, contradictory, unresolved, history };
   }
-  events(targetId = this.target.id) { this.targetById(targetId); return (this.db.prepare('SELECT payload_json,recorded_at FROM external_events WHERE destination_id=? ORDER BY seq DESC').all(targetId) as Array<{payload_json:string;recorded_at:string}>).map((row) => ({ ...JSON.parse(row.payload_json), recordedAt: row.recorded_at }) as StoredExternalEvent); }
+  events(targetId = this.target.id) { this.targetById(targetId); return (this.db.prepare('SELECT payload_json,recorded_at FROM external_events WHERE destination_id=? ORDER BY seq DESC LIMIT ?').all(targetId, EXTERNAL_RECENT_EVENT_LIMIT) as Array<{payload_json:string;recorded_at:string}>).map((row) => ({ ...JSON.parse(row.payload_json), recordedAt: row.recorded_at }) as StoredExternalEvent); }
+  hasEarlierObservedArtifact(targetId: string, artifactId: string, beforeObservedAt: string): boolean {
+    this.targetById(targetId);
+    return !!this.db.prepare("SELECT 1 FROM external_events WHERE destination_id=? AND kind='observation' AND outcome='observed' AND artifact_id=? AND observed_at < ? LIMIT 1")
+      .get(targetId, artifactId, beforeObservedAt);
+  }
+  historyPage(targetId: string, page: number): ExternalHistoryPage {
+    this.targetById(targetId);
+    if (!Number.isSafeInteger(page) || page < 1) throw new ExternalRuntimeError('History page must be a positive safe integer.');
+    const total = Number((this.db.prepare('SELECT COUNT(*) AS count FROM external_events WHERE destination_id=?').get(targetId) as {count:number}).count);
+    const pageCount = Math.ceil(total / EXTERNAL_HISTORY_PAGE_SIZE);
+    if (page > Math.max(pageCount, 1)) throw new ExternalRuntimeError('History page is outside the retained event ledger.', 404);
+    const rows = this.db.prepare('SELECT payload_json,recorded_at FROM external_events WHERE destination_id=? ORDER BY seq DESC LIMIT ? OFFSET ?')
+      .all(targetId, EXTERNAL_HISTORY_PAGE_SIZE, (page - 1) * EXTERNAL_HISTORY_PAGE_SIZE) as Array<{payload_json:string;recorded_at:string}>;
+    return { events: rows.map((row) => ({ ...JSON.parse(row.payload_json), recordedAt: row.recorded_at }) as StoredExternalEvent), page, pageSize: EXTERNAL_HISTORY_PAGE_SIZE, total, pageCount };
+  }
 }

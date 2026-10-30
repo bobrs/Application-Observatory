@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import type { ExternalRuntime } from './external-runtime.js';
+import { EXTERNAL_HISTORY_PAGE_SIZE, type ExternalRuntime } from './external-runtime.js';
 import { escapeHtml, layout } from './views.js';
 
 function errorPage(message: string) { return layout('External runtime update', `<h1>External runtime update rejected</h1><p class="notice">${escapeHtml(message)}</p><a href="/applications/hello-observatory">Return to Hello Observatory</a>`); }
@@ -16,7 +16,7 @@ export function externalControls(runtime: ExternalRuntime, csrf: string): string
       || (state.receipt?.kind === 'receipt' && Date.parse(state.observation.observedAt ?? '') <= Date.parse(state.receipt.finishedAt ?? '')));
   const canReconcile = !!state.directive && state.unresolved && state.fresh && state.observation?.kind === 'observation'
     && state.observation.outcome === 'observed' && !reconciliationNeedsRead && !state.reconciled;
-  const rollbackOptions = state.fresh && state.observation?.outcome === 'observed' ? target.artifacts.filter((artifact) => artifact.artifactId !== state.observation!.artifactId && runtime.events().some((event) => event.kind === 'observation' && event.outcome === 'observed' && event.artifactId === artifact.artifactId && Date.parse(event.observedAt ?? '') < Date.parse(state.observation!.observedAt ?? ''))) : [];
+  const rollbackOptions = state.fresh && state.observation?.outcome === 'observed' ? target.artifacts.filter((artifact) => artifact.artifactId !== state.observation!.artifactId && runtime.hasEarlierObservedArtifact(target.id, artifact.artifactId, state.observation!.observedAt!)) : [];
   const h = (value: unknown) => escapeHtml(String(value ?? 'Unknown'));
   const history = state.history.map(({ directive, events }) => `<details><summary>Directive ${h((directive as Record<string,unknown>).id)} · ${h((directive as Record<string,unknown>).action)} ${h((directive as Record<string,unknown>).version)}</summary><pre>${h(JSON.stringify({directive,events},null,2))}</pre></details>`).join('');
   return `<section class="panel external-runtime" id="external-runtime"><h2>External runtime · ${h(target.name)}</h2><p><strong>${stateLabel}</strong> · ${h(target.stage)} · externally managed process; health is not evaluated.</p><p>This page reads persisted evidence only. The external client separately polls directives and submits receipt or version observations; opening this page never probes or executes the target.</p>
@@ -29,7 +29,17 @@ export function externalControls(runtime: ExternalRuntime, csrf: string): string
     ${state.unresolved ? '<p class="notice">This directive blocks another change until an operator records a continuation decision against a fresh observed version readback. No receipt or execution success is inferred.</p>' : ''}${state.executionUnknown ? '<p class="notice">Execution outcome remains unknown. Reconciliation records an explicit operator decision against a readback; it does not retry or rewrite the directive or receipt.</p>' : ''}${state.contradictory ? '<p class="notice">The latest valid runtime version observation contradicts the completed directive. The discrepancy is preserved for review.</p>' : ''}${reconciliationNeedsRead ? '<p class="notice">Collect a fresh observed version after this directive and its receipt before recording continuation.</p>' : ''}${failedReceiptNeedsRead ? '<p class="notice">The failed operation needs a separate fresh observation collected after its receipt before another directive.</p>' : ''}
     ${canReconcile ? `<form method="post" action="/external/targets/${encodeURIComponent(target.id)}/reconcile" class="external-control reconciliation-control"><input type="hidden" name="csrf" value="${escapeHtml(csrf)}"><input type="hidden" name="directiveId" value="${escapeHtml(state.directive!.id)}"><h3>Record continuation against this readback</h3><label>Actor <input required maxlength="120" name="actor" autocomplete="name"></label><label>Rationale <textarea required maxlength="1000" name="rationale" rows="3"></textarea></label><button type="submit">Record operator reconciliation</button></form>` : ''}
     ${canChange ? `<div class="external-forms">${form(csrf,target.id,'deploy','Deploy / change version',target.artifacts)}${rollbackOptions.length ? form(csrf,target.id,'rollback','Rollback to retained release',rollbackOptions) : ''}</div>` : ''}
-    <p class="source-note">Artifact identities are private-config allowlisted pairs. Actor and rationale are local declarations, not authenticated organizational standing. Only one unresolved directive is allowed; unknown outcomes are never replayed automatically.</p><h3>Directive and event history</h3>${history || '<p>No external directives or events recorded.</p>'}</section>`;
+    <p class="source-note">Artifact identities are private-config allowlisted pairs. Actor and rationale are local declarations, not authenticated organizational standing. Only one unresolved directive is allowed; unknown outcomes are never replayed automatically.</p><h3>Recent directive and event preview</h3>${history || '<p>No external directives or events recorded.</p>'}<p class="source-note">This preview includes at most 10 recent directives and five events per directive. Older retained events are available in the complete paginated ledger.</p><a href="/applications/hello-observatory/history">Open complete external event history →</a></section>`;
+}
+
+function historyPage(runtime: ExternalRuntime, page: number) {
+  const ledger = runtime.historyPage(runtime.target.id, page);
+  const first = ledger.total === 0 ? 0 : (page - 1) * EXTERNAL_HISTORY_PAGE_SIZE + 1;
+  const last = Math.min(page * EXTERNAL_HISTORY_PAGE_SIZE, ledger.total);
+  const rows = ledger.events.map((event) => `<li><h2>${escapeHtml(event.kind)} · ${escapeHtml(event.outcome)}</h2><p>${escapeHtml(event.eventId)} · ${escapeHtml(event.recordedAt)}</p><pre>${escapeHtml(JSON.stringify(event, null, 2))}</pre></li>`).join('');
+  const navigation = `${page > 1 ? `<a rel="prev" href="?page=${page - 1}">← Newer events</a>` : '<span>Newest events</span>'} · Page ${page} of ${Math.max(ledger.pageCount, 1)} · records ${first}–${last} of ${ledger.total} · ${ledger.pageSize} per page${page < ledger.pageCount ? ` · <a rel="next" href="?page=${page + 1}">Older events →</a>` : ' · Oldest events'}`;
+  const scopeLabel = ledger.total > ledger.pageSize ? `This page is partial; all ${ledger.total} retained events are counted across the ledger.` : `This page contains the full retained event ledger (${ledger.total} event${ledger.total === 1 ? '' : 's'}).`;
+  return layout('External event history', `<nav class="breadcrumbs"><a href="/applications/hello-observatory">Hello Observatory</a> / External event history</nav><h1>External event history</h1><p>This read-only page shows the retained event ledger in fixed pages of ${ledger.pageSize}. Opening it does not observe a target, create a record or dispatch a directive. ${scopeLabel}</p><p>${navigation}</p><ol class="activity-list">${rows || '<li>No external events recorded.</li>'}</ol><p>${navigation}</p><a href="/applications/hello-observatory#external-runtime">Return to Hello Observatory →</a>`);
 }
 
 export function externalRuntimeRoutes(app: FastifyInstance, runtime: ExternalRuntime, csrf: string) {
@@ -41,6 +51,14 @@ export function externalRuntimeRoutes(app: FastifyInstance, runtime: ExternalRun
   app.get<{Params:{targetId:string}}>('/api/runtime/v1/targets/:targetId/directive', async (request, reply) => {
     try { return reply.send({schemaVersion:1,directive:runtime.directive(request.params.targetId)}); }
     catch (error) { return reply.code((error as {statusCode?:number}).statusCode ?? 404).send({error:'unknown_target'}); }
+  });
+  app.get('/applications/hello-observatory/history', async (request, reply) => {
+    const raw = (request.query as Record<string, unknown>).page;
+    if (raw !== undefined && (typeof raw !== 'string' || !/^[1-9][0-9]{0,8}$/.test(raw))) return reply.code(400).type('text/html').send(errorPage('History page must be a positive page number.'));
+    const page = raw === undefined ? 1 : Number(raw);
+    if (!Number.isSafeInteger(page)) return reply.code(400).type('text/html').send(errorPage('History page must be a positive safe integer.'));
+    try { return reply.type('text/html').send(historyPage(runtime, page)); }
+    catch (error) { return reply.code((error as {statusCode?:number}).statusCode ?? 400).type('text/html').send(errorPage(error instanceof Error ? error.message : 'History page unavailable.')); }
   });
   app.post<{Params:{targetId:string};Body:unknown}>('/api/runtime/v1/targets/:targetId/events', async (request, reply) => {
     try { return reply.send(runtime.ingest(request.params.targetId, request.body)); }

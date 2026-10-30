@@ -45,6 +45,52 @@ test('external configuration is private, bounded, and identities come from opera
   const oversized=join(directory,'oversized.json'); writeFileSync(oversized,' '.repeat(65_537),{mode:0o600}); chmodSync(oversized,0o600); assert.throws(()=>readExternalConfig(oversized,token),/64 KiB/);
 });
 
+test('large external ledgers render bounded previews, retain full chronology and expose safe read-only pages', async (t) => {
+  const directory=mkdtempSync(join(tmpdir(),'ao-external-history-')); t.after(()=>rmSync(directory,{recursive:true,force:true}));
+  const configPath=join(directory,'private-config.json'); writeFileSync(configPath,JSON.stringify(config),{mode:0o600}); chmodSync(configPath,0o600);
+  const credentials=readExternalConfig(configPath,token); const catalog=openCatalog(join(directory,'db'));
+  const runtime=new ExternalRuntime(catalog.db,credentials.config,token);
+  const insertEvent=catalog.db.prepare(`INSERT INTO external_events (event_id,backend_id,application_id,destination_id,instance_id,directive_id,kind,source,detail,outcome,version,artifact_id,boot_id,observed_at,started_at,finished_at,recorded_at,payload_json) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`);
+  const base=Date.now()-200_000;
+  for(let i=0;i<1200;i++) {
+    const observedAt=new Date(base+i*100).toISOString(); const artifactId=i===0?ids.a:ids.b; const version=i===0?'1.0.0':'1.1.0';
+    const event={schemaVersion:1,eventId:`observation-${String(i).padStart(4,'0')}`,backendId:'private-backend',applicationId:'observatory-hello-reference',destinationId:'private-target',instanceId:'private-incarnation',directiveId:null,kind:'observation',source:'bounded HTTP GET /version',detail:`retained observation ${i} ${'x'.repeat(90)}`,outcome:'observed',observedAt,version,artifactId,bootId:`boot-${i}`};
+    const recordedAt=observedAt;
+    insertEvent.run(event.eventId,event.backendId,event.applicationId,event.destinationId,event.instanceId,null,event.kind,event.source,event.detail,event.outcome,event.version,event.artifactId,event.bootId,event.observedAt,null,null,recordedAt,JSON.stringify(event));
+  }
+  const insertDirective=catalog.db.prepare('INSERT INTO external_directives (id,backend_id,application_id,destination_id,instance_id,action,version,artifact_id,created_at,expected_boot_id,actor,rationale) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)');
+  for(let i=0;i<300;i++) insertDirective.run(`directive-${String(i).padStart(4,'0')}`,'private-backend','observatory-hello-reference','private-target','private-incarnation','deploy','1.1.0',ids.b,new Date(base+i).toISOString(),null,'Operator',`rationale ${i}`);
+  // Latest directive has a failed receipt; a newer fresh observation permits a new action.
+  const latestDirective='directive-0299'; const receiptAt=new Date(base+110_000).toISOString();
+  for(let i=0;i<300;i++) {
+    const at=i===299?receiptAt:new Date(base+1_000+i).toISOString();
+    const receiptEvent={schemaVersion:1,eventId:i===299?'latest-failed-receipt':`receipt-${String(i).padStart(4,'0')}`,backendId:'private-backend',applicationId:'observatory-hello-reference',destinationId:'private-target',instanceId:'private-incarnation',directiveId:`directive-${String(i).padStart(4,'0')}`,kind:'receipt',source:'external client',detail:'failed operation',outcome:'failed',artifactId:ids.b,startedAt:at,finishedAt:at};
+    insertEvent.run(receiptEvent.eventId,receiptEvent.backendId,receiptEvent.applicationId,receiptEvent.destinationId,receiptEvent.instanceId,receiptEvent.directiveId,receiptEvent.kind,receiptEvent.source,receiptEvent.detail,receiptEvent.outcome,null,receiptEvent.artifactId,null,null,receiptEvent.startedAt,receiptEvent.finishedAt,at,JSON.stringify(receiptEvent));
+  }
+  catalog.close();
+  const app=createApplication(join(directory,'db'),undefined,credentials); t.after(()=>app.close());
+
+  const detail=await app.inject('/applications/hello-observatory');
+  assert.equal(detail.statusCode,200); assert.ok(detail.body.length<45_000,`detail HTML was ${detail.body.length} bytes`);
+  assert.match(detail.body,/Recent directive and event preview/); assert.match(detail.body,/at most 10 recent directives and five events per directive/);
+  assert.doesNotMatch(detail.body,/observation-0000/); assert.match(detail.body,/Rollback to retained release/,'rollback eligibility must search the full retained ledger');
+
+  const history=await app.inject('/applications/hello-observatory/history?page=1');
+  assert.equal(history.statusCode,200); assert.match(history.body,/Page 1 of/); assert.match(history.body,/records 1–20 of 1500/); assert.ok(history.body.length<30_000);
+  const later=await app.inject('/applications/hello-observatory/history?page=75');
+  assert.equal(later.statusCode,200); assert.match(later.body,/observation-0000/,'old observations must remain navigable');
+  for(const page of ['0','-1','1.5','1e6','999999999','01','9999999999']) {
+    const response=await app.inject(`/applications/hello-observatory/history?page=${encodeURIComponent(page)}`);
+    assert.ok([400,404].includes(response.statusCode),`${page} should be rejected or outside the ledger`);
+  }
+  assert.equal((await app.inject('/applications/hello-observatory/history?page=1&page=2')).statusCode,400);
+  assert.equal((await app.inject({method:'POST',url:'/applications/hello-observatory/history?page=1'})).statusCode,405);
+  const verify=openCatalog(join(directory,'db'));
+  assert.equal((verify.db.prepare('SELECT COUNT(*) AS count FROM external_events').get()).count,1500);
+  assert.equal((verify.db.prepare('SELECT COUNT(*) AS count FROM external_directives').get()).count,300);
+  verify.close();
+});
+
 test('bearer auth, strict events, idempotency, correlation and persisted deploy then rollback progression', async (t) => {
   const {app,directory}=fixture(t);
   const unauthorized=await app.inject('/api/runtime/v1/targets/private-target/directive'); assert.equal(unauthorized.statusCode,401);
@@ -204,9 +250,9 @@ test('unknown and missing receipts need an explicit witnessed continuation befor
     const next=await createDirective(app,'deploy',`1.1.0|${ids.b}`,csrf); assert.equal(next.statusCode,303);
     const d2=(await app.inject({url:'/api/runtime/v1/targets/private-target/directive',headers:auth})).json().directive;
     assert.notEqual(d2.id,d1.id); assert.equal(d2.expectedBootId,'boot-recovered');
-    const history=(await app.inject('/applications/hello-observatory')).body; assert.match(history,/witness-missing|witness-unknown/); assert.match(history,/Continue after (missing|unknown) receipt/);
+    const history=(await app.inject('/applications/hello-observatory/history')).body; assert.match(history,/witness-missing|witness-unknown/); assert.match(history,/Continue after (missing|unknown) receipt/);
     await app.close();
     const reopened=createApplication(join(directory,'db'),undefined,readExternalConfig(join(directory,'private-config.json'),token)); t.after(()=>reopened.close());
-    const persisted=(await reopened.inject('/applications/hello-observatory')).body; assert.match(persisted,/witness-missing|witness-unknown/); assert.match(persisted,/Continue after (missing|unknown) receipt/);
+    const persisted=(await reopened.inject('/applications/hello-observatory/history')).body; assert.match(persisted,/witness-missing|witness-unknown/); assert.match(persisted,/Continue after (missing|unknown) receipt/);
   }
 });

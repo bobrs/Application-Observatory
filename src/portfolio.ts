@@ -120,7 +120,7 @@ export function referenceView(exercise?: Exercise, external?: ExternalRuntime): 
       observation: state.fresh ? observation : state.contradictory ? (observation?.outcome === 'observed' ? observation : last) : null, lastKnown: last,
       ...((state.executionUnknown || state.unresolved) && state.directive ? { uncertainRequestId: state.directive.id } : {}),
       ...(state.directive ? { recentChange: { text: `${state.directive.action} ${state.directive.version}`, result: String(state.receipt?.outcome ?? 'receipt pending'), decision: `declared by ${state.directive.actor}`, requestId: state.directive.id } } : {}),
-      evidence: { backendId: external.config.backendId, target: state.target, desiredDirective: state.directive, receipt: state.receipt, observation: ext, lastKnownObservation: state.lastObservation, history: state.history, fresh: state.fresh, contradictory: state.contradictory, unresolved: state.unresolved } });
+      evidence: { backendId: external.config.backendId, target: state.target, desiredDirective: state.directive, receipt: state.receipt, observation: ext, lastKnownObservation: state.lastObservation, fresh: state.fresh, contradictory: state.contradictory, unresolved: state.unresolved } });
     for (const event of external.events()) activity.push({ at: event.recordedAt, text: `${state.target.name}: external ${event.kind} ${event.outcome}${event.version ? ` ${event.version}` : ''}.`, source: `${event.source} — ${event.detail}` });
   }
   const pending = exercise?.reference ? pendingChanges(exercise) : [];
