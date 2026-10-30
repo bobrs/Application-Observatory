@@ -1,7 +1,7 @@
 import Fastify from 'fastify';
 import { openCatalog } from './catalog.js';
 import { notFoundPage } from './views.js';
-import { portfolioViews, referenceView } from './portfolio.js';
+import { externalApplicationViews, portfolioViews, referenceView } from './portfolio.js';
 import { portfolioPage, applicationOverview } from './portfolio-views.js';
 import { referencePage, selectionError, selectedDestination } from './reference/views.js';
 import { styles } from './styles.js';
@@ -21,7 +21,8 @@ export function createApplication(directory?: string, exercise?: Exercise, exter
   app.addHook('onRequest', async (request, reply) => {
     const pathname = request.url.split('?')[0]!;
     const exerciseRoute = !!exercise && ((exercise.reference && pathname === '/applications/hello-observatory') || pathname === (exercise.reference ? '/reference' : '/exercise') || pathname.startsWith(exercise.reference ? '/reference/' : '/exercise/'));
-    const externalUiRoute = !!runtime && (pathname === '/applications/hello-observatory' || pathname.startsWith('/external/'));
+    const externalSlugs = runtime?.config.applications.map((application) => `/applications/${application.slug}`) ?? [];
+    const externalUiRoute = !!runtime && (externalSlugs.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`)) || pathname.startsWith('/external/'));
     const apiRoute = !!runtime && pathname.startsWith('/api/runtime/v1/');
     reply.header('Content-Security-Policy', `default-src 'none'; style-src 'self'; img-src 'self' data:; base-uri 'none'; frame-ancestors 'none'; form-action ${exerciseRoute || externalUiRoute ? "'self'" : "'none'"}`)
       .header('X-Content-Type-Options', 'nosniff')
@@ -55,9 +56,18 @@ export function createApplication(directory?: string, exercise?: Exercise, exter
         catch { return reply.code(400).type('text/html').send(selectionError()); }
         return reply.type('text/html').send(referencePage(exercise, selected));
       }
+      if (runtime && !runtime.config.applications.some((application) => application.slug === 'hello-observatory')) return reply.code(404).type('text/html').send(notFoundPage());
       return reply.type('text/html').send(applicationOverview(referenceView(undefined, runtime), {
-        ...(runtime ? { external: true, controls: externalControls(runtime, csrf) } : { controls: '<section class="panel selection"><h2>Local reference session inactive</h2><p>No reference processes were started or observed by this mode. Start the existing opt-in mode from the checkout with <code>npm run reference</code> to connect its three disposable local destinations. This is not a remote deployment command.</p></section>' }),
+        ...(runtime ? { external: true, controls: runtime.config.targets.filter((target) => target.applicationId === runtime.config.applications.find((application) => application.slug === 'hello-observatory')?.id && target.mode !== 'planned').map((target) => externalControls(runtime, csrf, target.id)).join('') } : { controls: '<section class="panel selection"><h2>Local reference session inactive</h2><p>No reference processes were started or observed by this mode. Start the existing opt-in mode from the checkout with <code>npm run reference</code> to connect its three disposable local destinations. This is not a remote deployment command.</p></section>' }),
       }));
+    }
+    if (runtime) {
+      const application = externalApplicationViews(runtime).find((item) => item.id === request.params.id);
+      if (application) {
+        const metadata = runtime.config.applications.find((item) => item.slug === request.params.id)!;
+        const controls = runtime.config.targets.filter((target) => target.applicationId === metadata.id && target.mode !== 'planned').map((target) => externalControls(runtime, csrf, target.id)).join('');
+        return reply.type('text/html').send(applicationOverview(application, { external: true, controls }));
+      }
     }
     const application = portfolioViews(catalog.list(), exercise, runtime).find((item) => item.id === request.params.id);
     return application ? reply.type('text/html').send(applicationOverview(application, { exerciseLink: !!exercise && !exercise.reference }))
