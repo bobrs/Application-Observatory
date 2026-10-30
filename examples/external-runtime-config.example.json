@@ -1,18 +1,53 @@
 {
   "schemaVersion": 1,
   "backendId": "lab-node-v1",
+  "applications": [
+    {
+      "id": "observatory-hello-reference",
+      "slug": "hello-observatory",
+      "name": "Hello Observatory",
+      "purpose": "Accepted reference application"
+    },
+    {
+      "id": "aloha-reference",
+      "slug": "aloha-observatory",
+      "name": "Aloha Observatory",
+      "purpose": "Example second application; metadata alone does not establish operational state."
+    }
+  ],
   "targets": [
     {
-      "id": "x01-hello",
+      "id": "x01-hello-test",
       "name": "Hello Observatory · Test",
       "applicationId": "observatory-hello-reference",
       "stage": "Test",
       "instanceId": "replace-with-configured-incarnation",
       "artifacts": [
         { "version": "1.0.0", "artifactId": "sha256:0000000000000000000000000000000000000000000000000000000000000000" },
-        { "version": "1.1.0", "artifactId": "sha256:1111111111111111111111111111111111111111111111111111111111111111" },
-        { "version": "1.2.0", "artifactId": "sha256:2222222222222222222222222222222222222222222222222222222222222222" }
+        { "version": "1.1.0", "artifactId": "sha256:1111111111111111111111111111111111111111111111111111111111111111" }
       ]
+    },
+    {
+      "id": "x01-aloha-qa",
+      "name": "Aloha Observatory · QA",
+      "applicationId": "aloha-reference",
+      "stage": "QA",
+      "instanceId": "replace-with-another-configured-incarnation",
+      "mode": "observe-only",
+      "limitations": "Runtime self-report and local collector only; health and independent Test acceptance are not evaluated.",
+      "artifacts": [
+        { "version": "1.0.0", "artifactId": "sha256:2222222222222222222222222222222222222222222222222222222222222222" }
+      ]
+    },
+    {
+      "id": "x01-aloha-demo-planned",
+      "name": "Aloha Observatory · Demo",
+      "applicationId": "aloha-reference",
+      "stage": "Demo",
+      "instanceId": "replace-with-planned-identity",
+      "mode": "planned",
+      "limitations": "Configured metadata only; no runtime interface or artifacts are declared.",
+      "artifacts": []
     }
   ]
 }
