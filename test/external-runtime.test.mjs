@@ -70,7 +70,7 @@ test('bearer auth, strict events, idempotency, correlation and persisted deploy 
   assert.equal((await postEvent(app,{...obs,detail:'mutated'})).statusCode,409);
   const dupDir=await createDirective(app,'rollback',`1.0.0|${ids.a}`,csrf); assert.equal(dupDir.statusCode,409);
   let rec=receipt('receipt-one',d1.id,ids.a); assert.equal((await postEvent(app,rec)).statusCode,200);
-  let detail=await app.inject('/applications/hello-observatory'); assert.match(detail.body,/1.0.0/); assert.match(detail.body,/completed/); assert.match(detail.body,/fresh observation/i); assert.doesNotMatch(detail.body,/Rollback to retained release/);
+  let detail=await app.inject('/applications/hello-observatory'); assert.match(detail.body,/1.0.0/); assert.match(detail.body,/completed/); assert.match(detail.body,/fresh observed version readback/i); assert.doesNotMatch(detail.body,/Rollback to retained release/);
   // Receipt alone does not confirm state; a separately submitted, post-directive observation does.
   obs=observation('obs-after',ids.a,'1.0.0','boot-two',{directiveId:d1.id}); assert.equal((await postEvent(app,obs)).statusCode,200);
   const upgrade=await createDirective(app,'deploy',`1.1.0|${ids.b}`,csrf); assert.equal(upgrade.statusCode,303);
@@ -120,6 +120,7 @@ test('unknown and stale evidence stay distinct; failed receipt needs a later fre
   assert.equal(runtime.state().fresh,false);
   const unknownAt=at(); runtime.ingest('private-target',{schemaVersion:1,eventId:'unknown-now',backendId:'private-backend',applicationId:'observatory-hello-reference',destinationId:'private-target',instanceId:'private-incarnation',directiveId:null,kind:'observation',source:'bounded HTTP GET /version',detail:'target unavailable',outcome:'unknown',observedAt:unknownAt,version:null,artifactId:null,bootId:null});
   assert.equal(runtime.state().observation.outcome,'unknown'); assert.equal(runtime.state().fresh,false);
+  assert.throws(()=>runtime.reconcile('private-target',{directiveId:d2.id,actor:'Operator',rationale:'stale or unknown evidence'}),/fresh observed version readback/);
 });
 
 test('observation chronology, directive-correlated receipts, post-receipt confirmation and boot changes', (t) => {
@@ -150,4 +151,62 @@ test('observation chronology, directive-correlated receipts, post-receipt confir
   assert.equal(rt.state().contradictory,true); assert.equal(rt.state().unresolved,true);
   secondClock+=1000; obs('read-new-boot',current.id,'1.1.0',ids.b,'boot-two');
   assert.equal(rt.state().unresolved,false); assert.equal(rt.state().fresh,true);
+});
+
+test('unknown and missing receipts need an explicit witnessed continuation before a new directive', async (t) => {
+  for (const receiptMode of ['missing','unknown']) {
+    const {app,directory}=fixture(t);
+    const csrf=(await app.inject('/applications/hello-observatory')).body.match(/name="csrf" value="([a-f0-9]+)"/)?.[1]; assert.ok(csrf);
+    const created=await createDirective(app,'deploy',`1.0.0|${ids.a}`,csrf); assert.equal(created.statusCode,303);
+    const d1=(await app.inject({url:'/api/runtime/v1/targets/private-target/directive',headers:auth})).json().directive;
+    if (receiptMode === 'unknown') assert.equal((await postEvent(app,receipt('unknown-before-reconcile',d1.id,ids.a,'unknown'))).statusCode,200);
+    const before=await app.inject('/applications/hello-observatory'); assert.match(before.body,/Execution outcome unknown/); assert.match(before.body,/No receipt received\.|unknown ·/i); assert.doesNotMatch(before.body,/action="\/external\/targets\/private-target\/reconcile"/);
+    const postReconcile=(fields, origin='http://localhost:4310')=>app.inject({method:'POST',url:'/external/targets/private-target/reconcile',headers:{origin,host:'localhost:4310','content-type':'application/x-www-form-urlencoded'},payload:fields.toString()});
+    const early=await postReconcile(new URLSearchParams({csrf,directiveId:d1.id,actor:'Operator',rationale:'Continue from readback'})); assert.equal(early.statusCode,400);
+    await new Promise((resolve)=>setTimeout(resolve,4));
+    const observed=observation(`witness-${receiptMode}`,ids.a,'1.0.0','boot-observed',{directiveId:d1.id}); assert.equal((await postEvent(app,observed)).statusCode,200);
+    const witnessed=(await app.inject('/applications/hello-observatory')).body; assert.match(witnessed,/action="\/external\/targets\/private-target\/reconcile"/);
+    assert.equal((await postReconcile(new URLSearchParams({csrf,directiveId:'old-directive-id',actor:'Operator',rationale:'Wrong directive'}))).statusCode,409);
+    assert.equal((await postReconcile(new URLSearchParams({csrf,directiveId:d1.id,actor:'Operator',rationale:'Cross origin'}),'http://attacker.example')).statusCode,403);
+    const duplicate=new URLSearchParams({csrf,directiveId:d1.id,actor:'Operator',rationale:'Continue from readback'}); duplicate.append('csrf',csrf);
+    assert.equal((await postReconcile(duplicate)).statusCode,400);
+    assert.equal((await postReconcile(new URLSearchParams({csrf,directiveId:d1.id,actor:'Operator'}))).statusCode,403);
+    const apiForgery={...observed,eventId:`forge-${receiptMode}`,kind:'reconciliation',actor:'Operator',rationale:'fake'};
+    assert.equal((await postEvent(app,apiForgery)).statusCode,400);
+    const ack=await postReconcile(new URLSearchParams({csrf,directiveId:d1.id,actor:'Operator',rationale:`Continue after ${receiptMode} receipt; observed version only`})); assert.equal(ack.statusCode,303);
+    const afterAck=(await app.inject('/applications/hello-observatory')).body;
+    assert.match(afterAck,/Execution outcome unknown · operator continuation recorded/); assert.match(afterAck,/No receipt received\.|unknown ·/i); assert.match(afterAck,/Witness event/); assert.match(afterAck,/observed version only/);
+    if (receiptMode === 'missing') {
+      assert.equal((await postEvent(app,receipt('late-unknown-receipt',d1.id,ids.a,'unknown'))).statusCode,200);
+      assert.match((await app.inject('/applications/hello-observatory')).body,/reconciliation required/);
+      await new Promise((resolve)=>setTimeout(resolve,4));
+      assert.equal((await postEvent(app,observation('read-after-late-receipt',ids.a,'1.0.0','boot-observed',{directiveId:d1.id}))).statusCode,200);
+      assert.equal((await postReconcile(new URLSearchParams({csrf,directiveId:d1.id,actor:'Operator',rationale:'Reconcile after late receipt'}))).statusCode,303);
+    } else {
+      const priorFinish=new Date(Date.parse(observed.observedAt)-100).toISOString();
+      assert.equal((await postEvent(app,receipt('repeat-unknown-receipt',d1.id,ids.a,'unknown',{startedAt:priorFinish,finishedAt:priorFinish}))).statusCode,200);
+      assert.match((await app.inject('/applications/hello-observatory')).body,/reconciliation required/);
+      assert.equal((await postReconcile(new URLSearchParams({csrf,directiveId:d1.id,actor:'Operator',rationale:'Acknowledge the latest receipt event'}))).statusCode,303);
+    }
+    await new Promise((resolve)=>setTimeout(resolve,4));
+    assert.equal((await postEvent(app,observation(`benign-refresh-${receiptMode}`,ids.a,'1.0.0','boot-observed',{directiveId:d1.id}))).statusCode,200);
+    assert.match((await app.inject('/applications/hello-observatory')).body,/operator continuation recorded/);
+    await new Promise((resolve)=>setTimeout(resolve,4));
+    assert.equal((await postEvent(app,observation(`changed-boot-${receiptMode}`,ids.a,'1.0.0','boot-changed',{directiveId:d1.id}))).statusCode,200);
+    assert.match((await app.inject('/applications/hello-observatory')).body,/reconciliation required/);
+    assert.equal((await createDirective(app,'deploy',`1.1.0|${ids.b}`,csrf)).statusCode,409);
+    await new Promise((resolve)=>setTimeout(resolve,4));
+    const unknownRead={schemaVersion:1,eventId:`unknown-refresh-${receiptMode}`,backendId:'private-backend',applicationId:'observatory-hello-reference',destinationId:'private-target',instanceId:'private-incarnation',directiveId:d1.id,kind:'observation',source:'bounded HTTP GET /version',detail:'target unavailable',outcome:'unknown',observedAt:new Date().toISOString(),version:null,artifactId:null,bootId:null};
+    assert.equal((await postEvent(app,unknownRead)).statusCode,200); assert.equal((await createDirective(app,'deploy',`1.1.0|${ids.b}`,csrf)).statusCode,409);
+    await new Promise((resolve)=>setTimeout(resolve,4));
+    assert.equal((await postEvent(app,observation(`readback-recovered-${receiptMode}`,ids.a,'1.0.0','boot-recovered',{directiveId:d1.id}))).statusCode,200);
+    assert.equal((await postReconcile(new URLSearchParams({csrf,directiveId:d1.id,actor:'Operator',rationale:'New boot observed after unknown read'}))).statusCode,303);
+    const next=await createDirective(app,'deploy',`1.1.0|${ids.b}`,csrf); assert.equal(next.statusCode,303);
+    const d2=(await app.inject({url:'/api/runtime/v1/targets/private-target/directive',headers:auth})).json().directive;
+    assert.notEqual(d2.id,d1.id); assert.equal(d2.expectedBootId,'boot-recovered');
+    const history=(await app.inject('/applications/hello-observatory')).body; assert.match(history,/witness-missing|witness-unknown/); assert.match(history,/Continue after (missing|unknown) receipt/);
+    await app.close();
+    const reopened=createApplication(join(directory,'db'),undefined,readExternalConfig(join(directory,'private-config.json'),token)); t.after(()=>reopened.close());
+    const persisted=(await reopened.inject('/applications/hello-observatory')).body; assert.match(persisted,/witness-missing|witness-unknown/); assert.match(persisted,/Continue after (missing|unknown) receipt/);
+  }
 });
