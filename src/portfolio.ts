@@ -2,6 +2,7 @@ import type { Application } from './catalog.js';
 import type { Exercise } from './exercise/controller.js';
 import type { Observation, Plan } from './exercise/model.js';
 import { running } from './reference/target.js';
+import type { ExternalRuntime } from './external-runtime.js';
 
 export interface Activity { at: string; text: string; source: string; requestId?: string }
 export interface Directive {
@@ -63,7 +64,7 @@ export function pendingChanges(exercise: Exercise): PendingChangeView[] {
       ...(decision ? { decision } : {}) }];
   });
 }
-export function referenceView(exercise?: Exercise): ApplicationView {
+export function referenceView(exercise?: Exercise, external?: ExternalRuntime): ApplicationView {
   const requests = exercise?.reference ? exercise.requests() : [];
   const activity: Activity[] = [];
   const directives: Directive[] = [];
@@ -106,28 +107,46 @@ export function referenceView(exercise?: Exercise): ApplicationView {
       activity.push({ at: event.recordedAt, text, source: event.source, requestId: plan.id });
     }
   }
+  if (external) {
+    const state = external.state(); const ext = state.observation;
+    const adapt = (event: NonNullable<typeof ext>): Observation => event.outcome === 'observed'
+      ? { instanceId: state.target.instanceId, bootId: String(event.bootId), version: String(event.version), responseHash: '', outcome: 'observed', digest: String(event.artifactId).replace(/^sha256:/, ''), generation: null, observedAt: String(event.observedAt), recordedAt: event.recordedAt, source: event.source, detail: event.detail, operationId: event.directiveId }
+      : { instanceId: state.target.instanceId, bootId: '', outcome: 'unknown', digest: null, generation: null, observedAt: null, recordedAt: event.recordedAt, source: event.source, detail: event.detail, operationId: event.directiveId };
+    const last = state.lastObservation ? adapt(state.lastObservation) : null;
+    const observation = ext ? adapt(ext) : null;
+    const stateName: DestinationView['state'] = state.contradictory ? 'Exception' : state.fresh ? 'Observed' : ext?.outcome === 'unknown' || !last ? 'Unknown' : 'Stale';
+    destinations.push({ id: state.target.id, name: state.target.name, stage: state.target.stage, disposable: false, state: stateName,
+      explanation: state.contradictory ? 'Fresh external evidence contradicts the completed directive. Inspect both receipt and observation.' : state.fresh ? 'Fresh externally collected runtime report; this is a version claim, not health or acceptance.' : 'External state is unobserved, unknown or stale. Earlier evidence remains historical.',
+      observation: state.fresh ? observation : state.contradictory ? (observation?.outcome === 'observed' ? observation : last) : null, lastKnown: last,
+      ...(state.unresolved && state.directive ? { uncertainRequestId: state.directive.id } : {}),
+      ...(state.directive ? { recentChange: { text: `${state.directive.action} ${state.directive.version}`, result: String(state.receipt?.outcome ?? 'receipt pending'), decision: `declared by ${state.directive.actor}`, requestId: state.directive.id } } : {}),
+      evidence: { backendId: external.config.backendId, target: state.target, desiredDirective: state.directive, receipt: state.receipt, observation: ext, lastKnownObservation: state.lastObservation, history: state.history, fresh: state.fresh, contradictory: state.contradictory, unresolved: state.unresolved } });
+    for (const event of external.events()) activity.push({ at: event.recordedAt, text: `${state.target.name}: external ${event.kind} ${event.outcome}${event.version ? ` ${event.version}` : ''}.`, source: `${event.source} — ${event.detail}` });
+  }
   const pending = exercise?.reference ? pendingChanges(exercise) : [];
   const needsObservation = destinations.some((destination) => destination.state !== 'Observed');
-  const nextAction = !exercise?.reference ? 'Start a disposable reference session to connect local destinations; no runtime is observed here.'
+  const nextAction = external && destinations.some((item) => item.uncertainRequestId) ? 'Reconcile the external receipt and separately collected observation. Never replay an unknown directive.'
+    : external && !destinations.some((item) => item.state === 'Observed') ? 'Wait for the external client to collect a fresh runtime observation; page rendering does not probe the target.'
+    : !exercise?.reference && !external ? 'Start a disposable reference session to connect local destinations; no runtime is observed here.'
     : needsObservation ? 'Refresh observations and inspect any unavailable, stale or conflicting destination before proposing another change.'
     : destinations.some((destination) => destination.uncertainRequestId) ? 'Inspect the unknown execution outcome and separate observed state. Do not replay the consumed request; any further change needs a new decision.'
     : pending.length ? 'Review pending changes and decisions; a declared authorization still needs an explicit apply.'
     : 'Select an exact accepted version and destination if a change is needed; otherwise no release decision is pending.';
-  return { id: 'hello-observatory', name: 'Hello Observatory', purpose: 'Make actual software versions visible across disposable local destinations.',
-    stewardship: 'Repository owner / demo operator (roles; no separately authenticated individual)', kind: 'Disposable reference application',
+  return { id: 'hello-observatory', name: 'Hello Observatory', purpose: 'Make actual software versions visible across local and externally managed destinations.',
+    stewardship: 'Repository owner / demo operator (roles; no separately authenticated individual)', kind: external ? 'External reference application' : 'Disposable reference application',
     recognition: 'Known from the bundled, accepted reference definition; catalog recognition is not operational approval or health.',
     destinations, nextRole: 'Local demo operator', nextAction, activity: activity.sort((a, b) => b.at.localeCompare(a.at)), directives, pendingChanges: pending,
     metadata: { sourceType: 'Bundled reference definition — not a database seed, runtime observation or registration timestamp',
       repository: 'https://github.com/bobrs/observatory-hello-reference', acceptedSource: 'da5731368d49c0426fd57a52588ff3db3e4a69e2',
       source: 'https://github.com/bobrs/observatory-hello-reference/blob/da5731368d49c0426fd57a52588ff3db3e4a69e2/PROJECT.md',
-      scope: 'Only the three accepted artifacts and three existing owned local destinations may execute. Presentation supports other counts without creating runtime targets.' },
+      scope: external ? 'One externally managed Hello Test target; Observatory records directives and evidence but runs no external host commands.' : 'Only the three accepted artifacts and three existing owned local destinations may execute. Presentation supports other counts without creating runtime targets.' },
   };
 }
-export function portfolioViews(applications: Application[], exercise?: Exercise): ApplicationView[] {
+export function portfolioViews(applications: Application[], exercise?: Exercise, external?: ExternalRuntime): ApplicationView[] {
   return [...applications.map((application): ApplicationView => ({ id: application.id, name: application.name, purpose: application.purpose,
     stewardship: application.stewardship, kind: application.id === 'application-observatory' ? 'Self-entry' : 'Registered record',
     recognition: 'Seeded project metadata; not an operational observation or independent verification.', destinations: [],
     nextRole: 'Product Sponsor / steward', nextAction: 'Decide whether scoped operational observations are needed. No current release decision is recorded.',
     activity: [], directives: [], metadata: application,
-  })), referenceView(exercise)];
+  })), referenceView(exercise, external)];
 }
