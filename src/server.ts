@@ -1,16 +1,18 @@
 import { createApplication } from './app.js';
-import { portNumber } from './config.js';
+import { parseAllowedHosts, portNumber } from './config.js';
 import { createExercise } from './exercise/controller.js';
 import { readExternalConfig } from './external-runtime.js';
 
 process.umask(0o077);
 const port = portNumber();
+const configuredHosts = process.env.AO_ALLOWED_HOSTS;
+parseAllowedHosts(configuredHosts); // Fail before opening data or starting owned processes.
 if (process.argv.slice(2).length > 1 || process.argv.slice(2).some((argument) => !['--exercise', '--reference'].includes(argument))) throw new Error('Only one fixed --exercise or --reference mode is supported.');
 const reference = process.argv.includes('--reference');
 const external = readExternalConfig();
 if (external && process.argv.length > 2) throw new Error('External runtime mode cannot be combined with --exercise or --reference.');
 const exercise = reference ? await createExercise(process.env.AO_REFERENCE_DIR, undefined, true) : process.argv.includes('--exercise') ? await createExercise(process.env.AO_EXERCISE_DIR) : undefined;
-const app = createApplication(exercise?.workspace.directory, exercise, external);
+const app = createApplication(exercise?.workspace.directory, exercise, external, configuredHosts);
 let closing = false;
 async function close() {
   if (closing) return;

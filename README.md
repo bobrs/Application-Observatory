@@ -20,7 +20,21 @@ Open **http://127.0.0.1:4310**. The compact **Applications** register lists **Ap
 
 The Observatory keeps its original seeded project metadata, source revision and first-recorded timestamp; its own actual deployed state remains unknown, with zero connected concrete destinations. The original AO-INC-001 next-review text is preserved under **Application definition and historical metadata**, never used as a current decision. Hello is a known bundled reference definition with immutable accepted-source provenance, not a new database row or an invented registration/runtime timestamp. Normal mode starts no reference process and observes none. Registration/recognition never implies health, operational approval or Production readiness.
 
-The server always binds to `127.0.0.1`, accepts only local Host names, and offers GET/HEAD pages only. Normal mode has no editing, approval or executable release controls, no client JavaScript and no automatic external requests. The inactive Hello detail explains the opt-in reference mode. Use **Ctrl-C** to stop; restart with `npm start`. An occupied port causes startup to fail instead of starting a second service; use `AO_PORT=4311 npm start` if needed. `AO_PORT=0` selects a free loopback port printed at startup.
+The server always binds to `127.0.0.1`, accepts only `127.0.0.1` and `localhost` Host names by default, and offers GET/HEAD pages only. Normal mode has no editing, approval or executable release controls, no client JavaScript and no automatic external requests. The inactive Hello detail explains the opt-in reference mode. Use **Ctrl-C** to stop; restart with `npm start`. An occupied port causes startup to fail instead of starting a second service; use `AO_PORT=4311 npm start` if needed. `AO_PORT=0` selects a free loopback port printed at startup.
+
+### Explicit trusted-LAN shared access
+
+For operator-authorized trusted-LAN shared access, `AO_ALLOWED_HOSTS` adds explicit HTTP Host names to the two local defaults. For example, using a synthetic hostname and documentation-only IPv4 address:
+
+```sh
+AO_ALLOWED_HOSTS='observatory.example.invalid,192.0.2.10' npm start
+```
+
+The listener remains `127.0.0.1`. The Lab's separately configured LAN TCP forwarding must preserve the browser's HTTP `Host`, including its port; it forwards to this loopback listener without rewriting that header. The setting changes Host acceptance only. `Forwarded` and `X-Forwarded-Host` do not override the direct Host, and proxy trust is unchanged. Future reverse-proxy setup remains operator work.
+
+Leave the variable unset for local defaults. When set, supply 1–20 unique comma-separated ASCII hostnames or canonical dotted-decimal IPv4 addresses, at most 4096 characters total. ASCII spaces around entries are accepted; whitespace inside names and all control characters are rejected. Hostnames normalize to lowercase, use 1–63-character letters/digits/hyphens labels (no leading/trailing hyphen), and are at most 253 characters without a trailing dot. Numeric/hex IP shorthand and malformed IPv4-like names are rejected. Empty settings/items, case-insensitive duplicates, wildcard, scheme, port, path and IPv6 entries fail startup with an error that omits the supplied configuration. Ports belong in the browser URL, never in this setting. No DNS lookup is performed.
+
+This is an explicit shared-access opt-in for the existing modes. Normal mode stays read-only; control forms retain same-origin HTTP scheme/Host/port matching and CSRF checks. The runtime API still requires its private bearer write credential, which stays with the operator/client and is never placed in browser HTML. Declared actors are not authenticated humans.
 
 ### Local data, migration and recovery
 

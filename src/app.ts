@@ -1,5 +1,6 @@
 import Fastify from 'fastify';
 import { openCatalog } from './catalog.js';
+import { parseAllowedHosts } from './config.js';
 import { escapeHtml, layout, notFoundPage } from './views.js';
 import { externalApplicationViews, portfolioViews, referenceView } from './portfolio.js';
 import { portfolioPage, applicationOverview } from './portfolio-views.js';
@@ -12,7 +13,8 @@ import { externalControls, externalRuntimeRoutes } from './external-routes.js';
 import type { Exercise } from './exercise/controller.js';
 import { exerciseRoutes } from './exercise/routes.js';
 
-export function createApplication(directory?: string, exercise?: Exercise, external?: { config: ExternalConfig; token: string }) {
+export function createApplication(directory?: string, exercise?: Exercise, external?: { config: ExternalConfig; token: string }, configuredHosts?: string) {
+  const allowedHosts = new Set(parseAllowedHosts(configuredHosts));
   if (exercise && external) throw new Error('External runtime and local reference/exercise modes cannot run together.');
   const catalog = openCatalog(directory);
   const runtime = external ? new ExternalRuntime(catalog.db, external.config, external.token) : undefined;
@@ -29,8 +31,8 @@ export function createApplication(directory?: string, exercise?: Exercise, exter
       .header('X-Content-Type-Options', 'nosniff')
       .header('Referrer-Policy', exerciseRoute || externalUiRoute ? 'same-origin' : 'no-referrer')
       .header('Cache-Control', 'no-store');
-    if (!['127.0.0.1', 'localhost'].includes(request.hostname)) {
-      return reply.code(403).type('text/plain').send('This catalog only accepts local host names.');
+    if (!allowedHosts.has(request.hostname.toLowerCase())) {
+      return reply.code(403).type('text/plain').send('This catalog only accepts configured host names.');
     }
     if (apiRoute && !runtime!.authenticate(request.headers.authorization)) return reply.code(401).header('WWW-Authenticate', 'Bearer').type('application/json').send({ error: 'unauthorized' });
     if (!['GET', 'HEAD'].includes(request.method)) {
