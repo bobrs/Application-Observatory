@@ -2,7 +2,7 @@ import type { Application } from './catalog.js';
 import type { Exercise } from './exercise/controller.js';
 import type { Observation, Plan } from './exercise/model.js';
 import { running } from './reference/target.js';
-import type { ExternalRuntime, ExternalTarget } from './external-runtime.js';
+import type { ExternalRuntime, ExternalTarget, ExternalTargetState } from './external-runtime.js';
 
 export interface Activity { at: string; text: string; source: string; requestId?: string }
 export interface Directive {
@@ -18,6 +18,13 @@ export interface DestinationView {
   state: 'Unknown' | 'Stale' | 'Observed' | 'Exception' | 'Planned'; explanation: string;
   mode?: string; limitations?: string; targetId?: string;
   observation: Observation | null; lastKnown: Observation | null; url?: string;
+  localSummary?: { requestedAt: string; actor: string | null; role: string | null; decisionAt: string | null;
+    receipt: { outcome: string; source: string; recordedAt: string } | null; dispatched: boolean };
+  latestObservation?: Observation | null;
+  externalSummary?: Pick<ExternalTargetState, 'directive' | 'receipt' | 'observation' | 'reconciliation' | 'reconciled' | 'executionUnknown' | 'unresolved' | 'fresh' | 'contradictory'> & {
+    backendId: string; applicationId: string; instanceId: string;
+  };
+  receiptCondition?: 'missing' | 'unknown' | 'completed-unconfirmed' | 'completed' | 'failed';
   uncertainRequestId?: string;
   canChange?: boolean;
   recentChange?: { text: string; result: string; decision: string; requestId: string };
@@ -91,7 +98,10 @@ export function referenceView(exercise?: Exercise, external?: ExternalRuntime): 
       state: discrepancy ? 'Exception' : current ? 'Observed' : observation?.outcome === 'observed' && running(target) ? 'Stale' : 'Unknown',
       explanation: discrepancy ? 'Observed version differs from the latest dispatched candidate; inspect the separate receipt and observation.' : current ? 'Fresh runtime-reported version, checked against the accepted artifact and owned context.' : 'Current state is unobserved, unavailable or out of date. Earlier evidence is historical.',
       ...(uncertainRequestId ? { uncertainRequestId } : {}),
-      observation, lastKnown: known, ...(running(target) ? { url: target.address, canChange: true } : {}),
+      observation, lastKnown: known,
+      ...(plan ? { localSummary: { requestedAt: plan.createdAt, actor: decision ? String(decision.data.actor) : null,
+        role: decision ? String(decision.data.role) : null, decisionAt: decision?.recordedAt ?? null,
+        receipt: receipt ? { outcome: String(receipt.data.outcome), source: receipt.source, recordedAt: receipt.recordedAt } : null, dispatched: !!attempt } } : {}), ...(running(target) ? { url: target.address, canChange: true } : {}),
       ...(plan ? { recentChange: { text: `${changeName(plan)} to ${plan.candidateId}`, result: String(receipt?.data.outcome ?? (attempt ? 'unknown — receipt pending' : 'not dispatched')), decision: String(decision?.data.disposition ?? 'not recorded'), requestId: plan.id } } : {}),
       evidence: { instanceId: target.instanceId, currentBootId: target.bootId, latestObservation: observation,
         observationHistory: exercise.observations(destination.id), bootstrapHistory: exercise.events(`runtime:${destination.id}`) },
@@ -132,14 +142,19 @@ function projectExternalTarget(external: ExternalRuntime, target: ExternalTarget
   const state = external.state(target.id); const ext = state.observation;
   const adapt = (event: NonNullable<typeof ext>): Observation => event.outcome === 'observed'
     ? { instanceId: state.target.instanceId, bootId: String(event.bootId), version: String(event.version), responseHash: '', outcome: 'observed', digest: String(event.artifactId).replace(/^sha256:/, ''), generation: null, observedAt: String(event.observedAt), recordedAt: event.recordedAt, source: event.source, detail: event.detail, operationId: event.directiveId }
-    : { instanceId: state.target.instanceId, bootId: '', outcome: 'unknown', digest: null, generation: null, observedAt: null, recordedAt: event.recordedAt, source: event.source, detail: event.detail, operationId: event.directiveId };
+    : { instanceId: state.target.instanceId, bootId: '', outcome: 'unknown', digest: null, generation: null, observedAt: event.observedAt ?? null, recordedAt: event.recordedAt, source: event.source, detail: event.detail, operationId: event.directiveId };
   const last = state.lastObservation ? adapt(state.lastObservation) : null; const observation = ext ? adapt(ext) : null;
   const stateName: DestinationView['state'] = state.contradictory ? 'Exception' : state.fresh ? 'Observed' : ext?.outcome === 'unknown' || !last ? 'Unknown' : 'Stale';
   return { id: target.id, targetId: target.id, name: target.name, stage: target.stage, disposable: false, state: stateName, mode: target.mode, limitations: target.limitations,
-    explanation: state.contradictory ? 'Fresh external evidence contradicts the completed directive. Inspect both receipt and observation.' : state.fresh ? 'Fresh externally collected runtime report; this is a version claim, not health or acceptance.' : 'External state is unobserved, unknown or stale. Earlier evidence remains historical.',
-    observation: state.fresh ? observation : state.contradictory ? (observation?.outcome === 'observed' ? observation : last) : null, lastKnown: last,
-    ...((state.executionUnknown || state.unresolved) && state.directive ? { uncertainRequestId: state.directive.id } : {}),
-    ...(state.directive ? { recentChange: { text: `${state.directive.action} ${state.directive.version}`, result: String(state.receipt?.outcome ?? 'receipt pending'), decision: `declared by ${state.directive.actor}`, requestId: state.directive.id } } : {}),
+    explanation: state.contradictory ? `${state.fresh ? 'Fresh' : 'Historical'} external evidence contradicts the completed directive. Inspect both receipt and observation.` : state.fresh ? 'Fresh externally collected runtime report; this is a version claim, not health or acceptance.' : 'External state is unobserved, unknown or stale. Earlier evidence remains historical.',
+    observation: state.fresh ? observation : null, latestObservation: observation, lastKnown: last,
+    externalSummary: { backendId: external.config.backendId, applicationId: target.applicationId, instanceId: target.instanceId,
+      directive: state.directive, receipt: state.receipt, observation: state.observation, reconciliation: state.reconciliation,
+      reconciled: state.reconciled, executionUnknown: state.executionUnknown, unresolved: state.unresolved, fresh: state.fresh, contradictory: state.contradictory },
+    ...(state.directive ? { receiptCondition: !state.receipt ? 'missing' as const : state.receipt.outcome === 'unknown' ? 'unknown' as const
+      : state.receipt.outcome === 'completed' ? state.unresolved || !state.fresh || state.contradictory ? 'completed-unconfirmed' as const : 'completed' as const : 'failed' as const } : {}),
+    ...(state.executionUnknown && state.directive ? { uncertainRequestId: state.directive.id } : {}),
+    ...(state.directive ? { recentChange: { text: `${state.directive.action} ${state.directive.version}`, result: String(state.receipt?.outcome ?? 'Result not received'), decision: `declared by ${state.directive.actor}`, requestId: state.directive.id } } : {}),
     evidence: { backendId: external.config.backendId, target, desiredDirective: state.directive, receipt: state.receipt, observation: ext, lastKnownObservation: state.lastObservation, fresh: state.fresh, contradictory: state.contradictory, unresolved: state.unresolved } };
 }
 export function externalApplicationViews(external: ExternalRuntime): ApplicationView[] {

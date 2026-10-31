@@ -48,7 +48,7 @@ try {
     await page.screenshot({ path: join(output, `${name}.png`), fullPage: true });
   }
   await page.goto(address);
-  assert.equal(await page.locator('[data-application]').count(), 2); assert.equal(await page.locator('form,button,input,script').count(), 0);
+  assert.equal(await page.locator('[data-application]').count(), 2); assert.equal(await page.locator('form[method=post],input[name=csrf],input[name=candidateId],script').count(), 0);
   await capture('portfolio-unknown-desktop');
   await page.locator('[data-application=hello-observatory]').getByRole('link', { name: 'Hello Observatory', exact: true }).click();
   assert.equal(new URL(page.url()).pathname, '/applications/hello-observatory');

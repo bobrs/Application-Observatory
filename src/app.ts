@@ -1,9 +1,10 @@
 import Fastify from 'fastify';
 import { openCatalog } from './catalog.js';
-import { notFoundPage } from './views.js';
+import { escapeHtml, layout, notFoundPage } from './views.js';
 import { externalApplicationViews, portfolioViews, referenceView } from './portfolio.js';
 import { portfolioPage, applicationOverview } from './portfolio-views.js';
 import { referencePage, selectionError, selectedDestination } from './reference/views.js';
+import { environmentsPage, selectReadView } from './read-navigation.js';
 import { styles } from './styles.js';
 import { randomBytes } from 'node:crypto';
 import { ExternalRuntime, type ExternalConfig } from './external-runtime.js';
@@ -24,7 +25,7 @@ export function createApplication(directory?: string, exercise?: Exercise, exter
     const externalSlugs = runtime?.config.applications.map((application) => `/applications/${application.slug}`) ?? [];
     const externalUiRoute = !!runtime && (externalSlugs.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`)) || pathname.startsWith('/external/'));
     const apiRoute = !!runtime && pathname.startsWith('/api/runtime/v1/');
-    reply.header('Content-Security-Policy', `default-src 'none'; style-src 'self'; img-src 'self' data:; base-uri 'none'; frame-ancestors 'none'; form-action ${exerciseRoute || externalUiRoute ? "'self'" : "'none'"}`)
+    reply.header('Content-Security-Policy', `default-src 'none'; style-src 'self'; img-src 'self' data:; base-uri 'none'; frame-ancestors 'none'; form-action ${exerciseRoute || externalUiRoute || pathname === '/' || pathname === '/environments' ? "'self'" : "'none'"}`)
       .header('X-Content-Type-Options', 'nosniff')
       .header('Referrer-Policy', exerciseRoute || externalUiRoute ? 'same-origin' : 'no-referrer')
       .header('Cache-Control', 'no-store');
@@ -47,7 +48,17 @@ export function createApplication(directory?: string, exercise?: Exercise, exter
       return reply.code(405).header('Allow', 'GET, HEAD').type('text/plain').send('This increment is read-only.');
     }
   });
-  app.get('/', async (_request, reply) => reply.type('text/html').send(portfolioPage(portfolioViews(catalog.list(), exercise, runtime))));
+  for (const path of ['/', '/environments']) app.get(path, async (request, reply) => {
+    const applications = portfolioViews(catalog.list(), exercise, runtime);
+    let selection;
+    try {
+      selection = selectReadView(request.raw.url ?? path, applications);
+    } catch (error) {
+      if (!(error instanceof Error)) throw error;
+      return reply.code(400).type('text/html').send(layout('Invalid filters', `<h1>Invalid filters</h1><p>${escapeHtml(error.message)}</p><a href="${path}">Reset filters</a>`, false, { active: path === '/environments' ? 'environments' : 'applications' }));
+    }
+    return reply.type('text/html').send(path === '/' ? portfolioPage(selection.applications, selection) : environmentsPage(selection));
+  });
   app.get<{ Params: { id: string } }>('/applications/:id', async (request, reply) => {
     if (request.params.id === 'hello-observatory') {
       if (exercise?.reference) {
