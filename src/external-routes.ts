@@ -42,7 +42,9 @@ export function externalControls(runtime: ExternalRuntime, csrf: string, targetI
 }
 
 function readCursor(request: { raw: { url?: string } }, allowed: string[]) {
-  const url = new URL(request.raw.url ?? '/', 'http://localhost');
+  const raw = request.raw.url ?? '/';
+  if (raw.length > 2048 || /%(?![a-fA-F0-9]{2})/.test(raw)) throw new Error('Invalid or oversized history query.');
+  const url = new URL(raw, 'http://localhost');
   const entries = [...url.searchParams.entries()];
   if (entries.some(([key]) => !allowed.includes(key)) || new Set(entries.map(([key]) => key)).size !== entries.length) throw new Error('Unsupported or repeated history query fields.');
   const read = (key: string): number | undefined => {
@@ -83,7 +85,7 @@ function directivePage(runtime: ExternalRuntime, targetId: string, through?: num
   const scopeLabel = ledger.total > ledger.pageSize ? `This page is partial; all ${ledger.total} retained directives are counted across the ledger.` : `This page contains the full retained directive ledger (${ledger.total} directive${ledger.total === 1 ? '' : 's'}).`;
   let oldDirective = '';
   if (lookup && !ledger.directives.some((row) => row.id === lookup)) {
-    const row = runtime.directiveById(targetId, lookup);
+    const row = runtime.directiveById(targetId, lookup, ledger.through);
     if (row) oldDirective = `<aside class="notice" id="directive-${escapeHtml(lookup)}"><h2>Associated historical directive</h2><p>${escapeHtml(String(row.action))} ${escapeHtml(String(row.version))} · ${escapeHtml(String(row.id))}</p><p>Original backend ${escapeHtml(String(row.backend_id))} · instance ${escapeHtml(String(row.instance_id))}</p><p>${escapeHtml(String(row.actor))} · ${escapeHtml(String(row.created_at))}</p><p>${escapeHtml(String(row.rationale))}</p></aside>`;
   }
   return layout('External directive ledger', `<nav class="breadcrumbs"><a href="/applications/${encodeURIComponent(slug)}">${escapeHtml(target.name)}</a> / External directive ledger</nav><h1>External directive ledger · ${escapeHtml(target.name)}</h1><p>This read-only archive covers this logical destination and application across all retained backends and instances. Every directive shows its original backend and instance, including directives with no events. It uses stable fixed pages of ${ledger.pageSize}; new directives are excluded from this traversal. Opening it does not observe a target, create a record or dispatch a directive. ${scopeLabel}</p>${oldDirective}<p>${navigation}</p><ol class="activity-list">${rows || '<li>No external directives recorded.</li>'}</ol><p>${navigation}</p><a href="${base}/history">Open complete external event history →</a> · <a href="/applications/${encodeURIComponent(slug)}#target-${encodeURIComponent(targetId)}">Return to application →</a>`);

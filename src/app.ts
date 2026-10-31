@@ -9,6 +9,8 @@ import { environmentsPage, selectReadView } from './read-navigation.js';
 import { styles } from './styles.js';
 import { randomBytes } from 'node:crypto';
 import { ExternalRuntime, type ExternalConfig } from './external-runtime.js';
+import { EvidenceReader } from './evidence.js';
+import { evidenceRoutes } from './evidence-routes.js';
 import { externalControls, externalRuntimeRoutes } from './external-routes.js';
 import type { Exercise } from './exercise/controller.js';
 import { exerciseRoutes } from './exercise/routes.js';
@@ -19,7 +21,7 @@ export function createApplication(directory?: string, exercise?: Exercise, exter
   const catalog = openCatalog(directory);
   const runtime = external ? new ExternalRuntime(catalog.db, external.config, external.token) : undefined;
   const csrf = randomBytes(32).toString('hex');
-  const app = Fastify({ logger: false, exposeHeadRoutes: true, bodyLimit: 4096 });
+  const app = Fastify({ logger: false, exposeHeadRoutes: true, bodyLimit: 4096, routerOptions: { maxParamLength: 160 } });
   app.addHook('onClose', async () => { try { await exercise?.close(); } finally { catalog.close(); } });
   app.addHook('onRequest', async (request, reply) => {
     const pathname = request.url.split('?')[0]!;
@@ -88,7 +90,7 @@ export function createApplication(directory?: string, exercise?: Exercise, exter
   });
   app.get('/styles.css', async (_request, reply) => reply.type('text/css').send(styles));
   if (exercise) exerciseRoutes(app, exercise);
-  if (runtime) externalRuntimeRoutes(app, runtime, csrf);
+  if (runtime) { externalRuntimeRoutes(app, runtime, csrf); evidenceRoutes(app, new EvidenceReader(catalog.db, runtime.config), external!.token); }
   app.setNotFoundHandler(async (_request, reply) => reply.code(404).type('text/html').send(notFoundPage()));
   return app;
 }

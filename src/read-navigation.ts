@@ -75,7 +75,7 @@ function age(value: string | null | undefined, evaluatedAt: number) {
 }
 function placement(application: ApplicationView, target: DestinationView, evaluatedAt: number) {
   const base = `/applications/${encodeURIComponent(application.id)}`;
-  const evidence = `${base}#destination-${encodeURIComponent(target.id)}`;
+  const evidence = target.targetId ? `${base}/targets/${encodeURIComponent(target.targetId)}` : `${base}#destination-${encodeURIComponent(target.id)}`;
   const summary = target.externalSummary;
   const latest = summary ? summary.observation : target.latestObservation ?? target.observation;
   const fresh = !!target.observation && target.observation.outcome === 'observed' && (summary ? summary.fresh : ['Observed', 'Exception'].includes(target.state));
@@ -109,5 +109,5 @@ export function environmentsPage(selection: ReadSelection) {
     ${[...groups].map(([stage, rows]) => `<section class="environment-stage" data-stage="${e(stage)}"><div class="section-heading"><h2>${e(stage)}</h2><span class="count">${rows.length} matching placements of ${selection.all.flatMap((application) => application.destinations).filter((target) => target.stage === stage).length} configured · ${new Set(rows.map(({ application }) => application.id)).size} matching applications</span></div><div class="placement-grid">${rows.map(({ application, target }) => placement(application, target, evaluatedAt)).join('')}</div></section>`).join('')}
     ${noPlacements.length ? `<section class="panel no-placements"><h2>Applications without placements</h2><ul>${noPlacements.map((application) => `<li><a href="/applications/${encodeURIComponent(application.id)}">${e(application.name)}</a> · No concrete destinations connected; current version unknown.</li>`).join('')}</ul></section>` : ''}
     ${!selection.applications.length ? '<section class="panel empty-results"><h2>No matching results</h2><p>Try fewer filters or <a href="/environments">reset filters</a>.</p></section>' : ''}
-    <p class="source-note">Archives retain original backend and incarnation scopes and may include earlier configurations. Full evidence and existing controls remain in application detail. Focused target pages and safe packet exports are planned for X02-3.</p>`, false, { active: 'environments', query: selection.query });
+    <p class="source-note">Archives retain original backend and incarnation scopes and may include earlier configurations. Focused target pages provide safe packets and pinned read links. Existing managed controls remain in application detail.</p>`, false, { active: 'environments', query: selection.query });
 }

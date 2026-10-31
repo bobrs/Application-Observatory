@@ -153,11 +153,11 @@ export class ExternalRuntime {
     const row = this.directives(targetId)[0];
     return row ? { id: String(row.id), backendId: String(row.backend_id), applicationId: String(row.application_id), destinationId: String(row.destination_id), instanceId: String(row.instance_id), action: row.action as Directive['action'], version: String(row.version), artifactId: String(row.artifact_id), createdAt: String(row.created_at), expectedBootId: row.expected_boot_id === null ? null : String(row.expected_boot_id) } : null;
   }
-  directiveById(targetId: string, directiveId: string) {
+  directiveById(targetId: string, directiveId: string, through = Number.MAX_SAFE_INTEGER) {
     const target = this.targetById(targetId);
     if (!id(directiveId)) return undefined;
-    return this.db.prepare('SELECT * FROM external_directives WHERE id=? AND destination_id=? AND application_id=?')
-      .get(directiveId, target.id, target.applicationId) as Record<string, unknown> | undefined;
+    return this.db.prepare('SELECT * FROM external_directives WHERE id=? AND destination_id=? AND application_id=? AND rowid<=?')
+      .get(directiveId, target.id, target.applicationId, through) as Record<string, unknown> | undefined;
   }
   createDirective(targetId: string, input: { action: unknown; version: unknown; artifactId: unknown; actor: unknown; rationale: unknown }) {
     const target = this.targetById(targetId);

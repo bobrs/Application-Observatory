@@ -55,7 +55,7 @@ test('navigation groups configured QA/Demo placements, counts duplicate stages o
   assert.match(overview.body, /4 matching placements of 4 configured · 4 matching applications of 4 known/);
   assert.match(overview.body, /Applications without placements/);
   assert.match(overview.body, /Unplaced app/);
-  assert.match(card(overview.body, 'qa-one'), /href="\/applications\/alpha#destination-qa-one"/);
+  assert.match(card(overview.body, 'qa-one'), /href="\/applications\/alpha\/targets\/qa-one"/);
   assert.match(card(overview.body, 'demo-planned'), /Configured only/);
   assert.match(card(overview.body, 'demo-planned'), /\/applications\/beta\/targets\/demo-planned\/history/);
   assert.doesNotMatch(overview.body, /<script|name="csrf"|<form[^>]+method="post"|href="https?:/);

@@ -207,8 +207,9 @@ test('replacement backend or incarnation cannot inherit live state while target 
     assert.doesNotMatch(history.body, /other-application-secret|other-target-secret/);
     assert.match(history.body, /private-backend/); assert.match(history.body, /private-incarnation/);
     const lookup = await app.inject(`/applications/hello-observatory/targets/${targetId}/directives?through=0&before=1&lookup=${directive.id}`);
-    assert.equal(lookup.statusCode, 200); assert.match(lookup.body, /Associated historical directive/); assert.match(lookup.body, /Original backend private-backend · instance private-incarnation/);
-    assert.match(lookup.body, /old-directive-001/); assert.match(lookup.body, /Retained before replacement/);
+    assert.equal(lookup.statusCode, 200); assert.doesNotMatch(lookup.body, /Associated historical directive|old-directive-001|Retained before replacement/, 'Lookup must not escape its directive cutoff');
+    const currentLookup = await app.inject(`/applications/hello-observatory/targets/${targetId}/directives?lookup=${directive.id}`);
+    assert.match(currentLookup.body, /old-directive-001|Retained before replacement/);
     assert.equal((await app.inject(`/applications/hello-observatory/targets/${targetId}/directives?lookup=${'x'.repeat(121)}`)).statusCode, 400);
     const reopened = openCatalog(dbPath);
     assert.deepEqual(reopened.db.prepare('SELECT event_id,payload_json FROM external_events WHERE destination_id=? AND application_id=? ORDER BY seq').all(targetId, applicationId), originalPayloads,
