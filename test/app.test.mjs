@@ -16,11 +16,11 @@ function fixture(t) {
 test('executive portfolio separates two applications, keeps controls behind drill-down, and preserves historical self metadata', async (t) => {
   const app = createApplication(fixture(t)); t.after(() => app.close());
   const portfolio = await app.inject('/');
-  assert.equal(portfolio.statusCode, 200); assert.match(portfolio.headers['content-security-policy'], /form-action 'none'/);
+  assert.equal(portfolio.statusCode, 200); assert.match(portfolio.headers['content-security-policy'], /form-action 'self'/);
   assert.match(portfolio.body, /<h1>Applications<\/h1>/); assert.match(portfolio.body, /2 known applications/);
   assert.match(portfolio.body, /data-application="application-observatory"/); assert.match(portfolio.body, /data-application="hello-observatory"/);
   assert.match(portfolio.body, /Product Sponsor \/ steward/); assert.match(portfolio.body, /Unknown/);
-  assert.doesNotMatch(portfolio.body, /<(form|input|button|script)\b/i);
+  assert.doesNotMatch(portfolio.body, /<script|<form[^>]+method="post"|name="csrf"|name="candidateId"/i);
   assert.doesNotMatch(portfolio.body, /class="reference-card"|name="candidateId"/);
   for (const row of portfolio.body.matchAll(/<div class="row-overview">([\s\S]*?)<\/div>/g)) assert.doesNotMatch(row[1], /PM review of AO-INC-001 evidence/);
   const detail = await app.inject('/applications/application-observatory');

@@ -1,4 +1,5 @@
 import { escapeHtml as e, layout } from './views.js';
+import { readCounts, readFilters, receiptLabel, type ReadSelection } from './read-navigation.js';
 import { groupDestinations, type ApplicationView, type DestinationView } from './portfolio.js';
 export const time = (value: string) => `<time datetime="${e(value)}">${e(value.replace('T', ' ').replace('Z', ' UTC'))}</time>`;
 const json = (value: unknown) => `<pre>${e(JSON.stringify(value, null, 2))}</pre>`;
@@ -6,7 +7,7 @@ function locationSummary(application: ApplicationView) {
   const groups = groupDestinations(application.destinations);
   if (!groups.length) return '<p class="portfolio-state"><strong>Unknown</strong> · No concrete destinations connected. No running version established.</p>';
   return `<ul class="stage-summary">${groups.slice(0, 3).map(({ stage, instances }) => {
-    const current = instances.filter((instance) => ['Observed', 'Exception'].includes(instance.state));
+    const current = instances.filter((instance) => ['Observed', 'Exception'].includes(instance.state) && instance.observation?.outcome === 'observed');
     const versions = [...new Set(current.map((instance) => instance.observation!.version))];
     const planned = instances.filter((instance) => instance.state === 'Planned').length;
     const unknown = instances.length - current.length - planned;
@@ -17,14 +18,22 @@ function attention(application: ApplicationView) {
   if (!application.destinations.length) return 'No operational evidence; recognition does not establish readiness.';
   const uncertain = application.destinations.filter((destination) => !['Observed', 'Planned'].includes(destination.state));
   const planned = application.destinations.filter((destination) => destination.state === 'Planned').length;
-  const unknownExecution = application.destinations.filter((destination) => destination.uncertainRequestId).length;
-  if (unknownExecution) return `${unknownExecution} execution outcome${unknownExecution === 1 ? '' : 's'} unknown; ${uncertain.length} version snapshot${uncertain.length === 1 ? '' : 's'} unknown/stale/conflicting. Keep receipts and observations separate.${planned ? ` ${planned} planned metadata-only.` : ''}`;
+  const results: string[] = [];
+  const unconfirmed = application.destinations.filter((destination) => destination.receiptCondition === 'completed-unconfirmed').length;
+  const missing = application.destinations.filter((destination) => destination.receiptCondition === 'missing').length;
+  const unknownReceipt = application.destinations.filter((destination) => destination.receiptCondition === 'unknown').length;
+  const unknownExecution = application.destinations.filter((destination) => destination.uncertainRequestId && !destination.receiptCondition).length;
+  if (unconfirmed) results.push(`${unconfirmed} completed receipt${unconfirmed === 1 ? '' : 's'}; running version unconfirmed`);
+  if (missing) results.push(`${missing} result${missing === 1 ? '' : 's'} not received`);
+  if (unknownReceipt) results.push(`${unknownReceipt} receipt outcome${unknownReceipt === 1 ? '' : 's'} unknown`);
+  if (unknownExecution) results.push(`${unknownExecution} execution outcome${unknownExecution === 1 ? '' : 's'} unknown`);
+  if (results.length) return `${results.join(' · ')}. ${uncertain.length} version snapshots unknown/stale/conflicting. Keep receipts and observations separate.${planned ? ` ${planned} planned metadata-only.` : ''}`;
   return uncertain.length ? `${uncertain.length} destination${uncertain.length === 1 ? '' : 's'} need attention: ${[...new Set(uncertain.map((destination) => destination.state.toLowerCase()))].join(', ')}.${planned ? ` ${planned} planned metadata-only.` : ''}` : planned ? `${planned} planned metadata-only; observed versions remain separate. Health and independent Test acceptance remain unknown.` : 'Version snapshots available. Health and independent Test acceptance remain unknown.';
 }
 function compactLocation(application: ApplicationView) {
   const destinations = application.destinations;
   if (!destinations.length) return 'Unknown · No operational destinations observed';
-  const current = destinations.filter((item) => ['Observed', 'Exception'].includes(item.state));
+  const current = destinations.filter((item) => ['Observed', 'Exception'].includes(item.state) && item.observation?.outcome === 'observed');
   const planned = destinations.filter((item) => item.state === 'Planned').length;
   const uncertain = destinations.length - current.length - planned;
   if (destinations.length <= 3 && !uncertain && !planned) return groupDestinations(destinations).map(({ stage, instances }) => {
@@ -40,7 +49,13 @@ function compactAttention(application: ApplicationView) {
   const declarations = pending.filter((change) => change.status === 'Declared authorization').length;
   if (decisions) signals.push(`${decisions} decision${decisions === 1 ? '' : 's'} pending`);
   if (declarations) signals.push(`${declarations} declared authorization${declarations === 1 ? '' : 's'} pending`);
-  const unknown = application.destinations.filter((item) => item.uncertainRequestId).length;
+  const missing = application.destinations.filter((item) => item.receiptCondition === 'missing').length;
+  const receiptUnknown = application.destinations.filter((item) => item.receiptCondition === 'unknown').length;
+  if (missing) signals.push(`${missing} result${missing === 1 ? '' : 's'} not received`);
+  if (receiptUnknown) signals.push(`${receiptUnknown} receipt outcome${receiptUnknown === 1 ? '' : 's'} unknown`);
+  const unknown = application.destinations.filter((item) => item.uncertainRequestId && !item.receiptCondition).length;
+  const unconfirmed = application.destinations.filter((item) => item.receiptCondition === 'completed-unconfirmed').length;
+  if (unconfirmed) signals.push(`${unconfirmed} completed receipt${unconfirmed === 1 ? '' : 's'}; version unconfirmed`);
   if (unknown) signals.push(`${unknown} execution outcome${unknown === 1 ? '' : 's'} unknown`);
   const uncertain = application.destinations.filter((item) => item.state !== 'Observed');
   if (uncertain.length) {
@@ -57,22 +72,25 @@ function compactResponsibility(application: ApplicationView) {
   return roles.length ? `${roles.slice(0, 2).join(' / ')}${roles.length > 2 ? ` +${roles.length - 2} more roles` : ''} · recorded request`
     : `${application.nextRole} · suggested next step`;
 }
-export function portfolioPage(applications: ApplicationView[]) {
-  return layout('Applications', `<div class="register-heading"><h1>Applications</h1><span class="count">${applications.length} known application${applications.length === 1 ? '' : 's'}</span></div>
+export function portfolioPage(applications: ApplicationView[], selection?: ReadSelection) {
+  return layout('Applications', `<div class="register-heading"><h1>Applications</h1><span class="count">${selection?.query ? `${applications.length} matching application` : `${applications.length} known application`}${applications.length === 1 ? '' : 's'}</span></div>
+    ${selection ? `${readFilters(selection, '/')}${readCounts(selection)}` : ''}${!applications.length ? '<p class="panel empty-results">No matching results. <a href="/">Reset filters</a>.</p>' : ''}
     <div class="portfolio-register">${applications.map((application) => `<article class="portfolio-row" data-application="${e(application.id)}"><div class="row-overview"><a class="application-name" href="/applications/${encodeURIComponent(application.id)}">${e(application.name)}</a><p class="row-location" aria-label="Version and destinations">${e(compactLocation(application))}</p><p class="row-attention" aria-label="Attention and responsible role">${e(compactAttention(application))}<span>${e(compactResponsibility(application))}</span></p></div>
-    <details class="row-context"><summary><span class="sr-only">Context for ${e(application.name)}</span><span class="row-chevron" aria-hidden="true">⌄</span></summary><div class="expanded-context"><p><strong>${e(application.kind)}</strong> · ${e(application.purpose)}</p><p class="source-note"><strong>Stewardship:</strong> ${e(application.stewardship)}</p><p>${e(application.recognition)}</p>${locationSummary(application)}<p>${e(attention(application))}</p><p><strong>Suggested next step:</strong> ${e(application.nextAction)}</p><details><summary>Sources and snapshot times</summary><ul>${application.destinations.map((destination) => `<li>${e(destination.name)}: ${e(destination.state)} · ${destination.observation ? `${time(destination.observation.recordedAt)} · ${e(destination.observation.source)}` : 'No observation recorded'}</li>`).join('')}</ul>${json(application.metadata)}</details><a class="button-link" href="/applications/${encodeURIComponent(application.id)}">Open application →</a></div></details></article>`).join('')}</div>
-    <p class="source-note register-help">Unknown is not healthy, failed or approved. Version snapshots do not establish health or independent Test acceptance. Suggested next steps are not recorded directives or authorizations.</p>`);
+    <details class="row-context"><summary><span class="sr-only">Context for ${e(application.name)}</span><span class="row-chevron" aria-hidden="true">⌄</span></summary><div class="expanded-context"><p><strong>${e(application.kind)}</strong> · ${e(application.purpose)}</p><p class="source-note"><strong>Stewardship:</strong> ${e(application.stewardship)}</p><p>${e(application.recognition)}</p>${locationSummary(application)}<p>${e(attention(application))}</p><p><strong>Suggested next step:</strong> ${e(application.nextAction)}</p><details><summary>Sources and snapshot times</summary><ul>${application.destinations.map((destination) => `<li>${e(destination.name)}: ${e(destination.state)} · ${(destination.latestObservation ?? destination.observation) ? `${time((destination.latestObservation ?? destination.observation)!.recordedAt)} · ${e((destination.latestObservation ?? destination.observation)!.source)}` : 'No observation recorded'}</li>`).join('')}</ul>${json(application.metadata)}</details><a class="button-link" href="/applications/${encodeURIComponent(application.id)}">Open application →</a></div></details></article>`).join('')}</div>
+    <p class="source-note register-help">Unknown is not healthy, failed or approved. Version snapshots do not establish health or independent Test acceptance. Suggested next steps are not recorded directives or authorizations.</p>`, false, { active: 'applications', query: selection?.query });
 }
 export function destinationCard(destination: DestinationView) {
-  const observed = ['Observed', 'Exception'].includes(destination.state) ? destination.observation : null;
+  const observed = ['Observed', 'Exception'].includes(destination.state) && destination.observation?.outcome === 'observed' ? destination.observation : null;
   const external = !!(destination.evidence && typeof destination.evidence === 'object' && 'backendId' in destination.evidence);
   return `<article class="panel reference-card" id="destination-${e(destination.id)}" data-destination="${e(destination.id)}"><h3>${e(destination.name)}</h3>${destination.disposable ? destination.stage === 'Production' ? '<p class="demo-warning">DISPOSABLE DEMO — NOT REAL PRODUCTION</p>' : '<p class="source-note">Disposable local demo</p>' : ''}
     <p class="version-number">${destination.state === 'Planned' ? 'Configured only' : observed ? e(observed.version ?? 'Unknown') : 'Unknown'}</p><p><strong>${e(destination.state)}</strong>${destination.state === 'Observed' ? ' · runtime-reported version' : ''}</p>
     ${destination.mode ? `<p class="source-note"><strong>Configured mode:</strong> ${e(destination.mode)}. This is a configuration declaration, not proof of backend capability.</p>` : ''}<p class="source-note">${e(destination.explanation)}</p>${observed ? `<p class="hash">${e(observed.digest!.slice(0, 23))}…</p><p class="source-note">${time(observed.observedAt!)}<br>${e(observed.source)}</p>` : destination.lastKnown ? `<p class="source-note">Last known: <strong>${e(destination.lastKnown.version ?? 'Unknown')}</strong><br>${time(destination.lastKnown.observedAt!)}<br>Historical; not current state.</p>` : '<p class="source-note">No valid version observed yet.</p>'}
+    ${destination.latestObservation ? `<p class="source-note">Latest collection: ${destination.latestObservation.observedAt ? time(destination.latestObservation.observedAt) : 'time unknown'} · ${e(destination.latestObservation.outcome)}<br>Recorded ${time(destination.latestObservation.recordedAt)} · ${e(destination.latestObservation.source)}</p>` : ''}
     ${destination.limitations ? `<p class="source-note"><strong>Limitations:</strong> ${e(destination.limitations)}</p>` : ''}
     ${destination.url && /^http:\/\/127\.0\.0\.1:[1-9]\d{0,4}$/.test(destination.url) ? `<a class="button-link" href="${e(destination.url)}" target="_blank" rel="noopener noreferrer">Open app ↗</a>` : '<p class="source-note">No active owned endpoint. Historical ports are not probed.</p>'}
     ${destination.canChange && destination.url && /^http:\/\/127\.0\.0\.1:[1-9]\d{0,4}$/.test(destination.url) ? `<a class="button-link change-version" href="/applications/hello-observatory?destination=${encodeURIComponent(destination.id)}#propose-change">Change version</a>` : ''}
-    ${destination.uncertainRequestId ? `<p class="notice">Execution outcome unknown. A version observation does not resolve the missing receipt. <a href="${external ? `#target-${encodeURIComponent(destination.id)}` : `/reference/requests/${e(destination.uncertainRequestId)}`}">Inspect ${external ? 'external evidence' : 'consumed request'}</a></p>` : ''}
+    ${destination.receiptCondition ? `<p class="notice">${e(receiptLabel(destination))}. Receipts and version observations remain separate.</p>` : ''}
+    ${destination.uncertainRequestId && !destination.receiptCondition ? `<p class="notice">Execution outcome unknown. A version observation does not resolve the missing receipt. <a href="${external ? `#target-${encodeURIComponent(destination.id)}` : `/reference/requests/${e(destination.uncertainRequestId)}`}">Inspect ${external ? 'external evidence' : 'consumed request'}</a></p>` : ''}
     ${destination.recentChange ? `<p class="latest-action"><a href="${external ? `#target-${encodeURIComponent(destination.id)}` : `/reference/requests/${e(destination.recentChange.requestId)}`}">${e(destination.recentChange.text)}</a><br><small>Decision: ${e(destination.recentChange.decision)} · Action: ${e(destination.recentChange.result)}</small></p>` : '<p class="source-note">No operator change requested.</p>'}
     <details><summary>Evidence</summary>${json(destination.evidence)}</details></article>`;
 }

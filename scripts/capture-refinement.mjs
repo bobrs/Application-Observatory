@@ -36,7 +36,7 @@ try {
   }
   const identity = () => exercise.environments.map((item) => ({ observations: exercise.observations(item.id), bootstrap: exercise.events(`runtime:${item.id}`), boot: exercise.targets.get(item.id).bootId }));
   await page.goto(address); const unchanged = identity();
-  assert.equal(await page.locator('[data-application]').count(), 2); assert.equal(await page.locator('form,input,button,script').count(), 0);
+  assert.equal(await page.locator('[data-application]').count(), 2); assert.equal(await page.locator('form[method=post],input[name=csrf],input[name=candidateId],script').count(), 0);
   assert.equal(await page.locator('.row-context[open]').count(), 0);
   const heights = await page.locator('.portfolio-row').evaluateAll((rows) => rows.map((row) => row.getBoundingClientRect().height));
   assert.ok(heights.every((height) => height >= 64 && height <= 81), JSON.stringify(heights));
@@ -44,7 +44,7 @@ try {
   const self = page.locator('[data-application=application-observatory]'); const hello = page.locator('[data-application=hello-observatory]');
   // Reach the disclosure through real sequential keyboard focus, rather than simulating a click.
   await page.keyboard.press('Tab');
-  for (let i = 0; i < 10 && !(await self.locator('.row-context > summary').evaluate((element) => element === document.activeElement)); i++) await page.keyboard.press('Tab');
+  for (let i = 0; i < 24 && !(await self.locator('.row-context > summary').evaluate((element) => element === document.activeElement)); i++) await page.keyboard.press('Tab');
   assert.equal(await self.locator('.row-context > summary').evaluate((element) => element === document.activeElement), true);
   const location = page.url(); await page.keyboard.press('Enter'); assert.equal(await self.locator('.row-context').getAttribute('open') !== null, true); assert.equal(page.url(), location);
   await hello.locator('.row-context > summary').focus(); await page.keyboard.press('Space'); assert.equal(await page.locator('.row-context[open]').count(), 2);
@@ -110,11 +110,11 @@ try {
   await page.locator('.row-context > summary').first().click(); await capture('illustrative-long-expanded-desktop', false);
   await page.setViewportSize({ width: 390, height: 844 }); await capture('illustrative-long-expanded-mobile');
   await page.locator('.row-context > summary').first().click(); await capture('illustrative-register-30-mobile', false);
-  assert.equal(await page.locator('form,input,button,script').count(), 0);
+  assert.equal(await page.locator('form[method=post],input[name=csrf],input[name=candidateId],script').count(), 0);
   scenarios.push('PASS: 30 clearly illustrative applications, long unbroken names/descriptions, collapsed and expanded desktop/mobile; no runtime registration, operational controls or overflow');
   assert.deepEqual(errors, []); assert.equal(externalRequests, 0);
   const report = { sourceCommit: execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim(), sourceDirty: execFileSync('git', ['status', '--porcelain=v1'], { encoding: 'utf8' }).trim() !== '', capturedAt: new Date().toISOString(), node: process.version,
     platform: `${process.platform} ${process.arch}`, browser: `Chromium ${browser.version()}`, collapsedRowHeights: heights, scenarios, browserErrors: errors, externalRequests,
-    limits: 'Dev-run macOS/Chromium, not independent Test/health/standing. Only original three fixed reference targets execute; larger register is a labeled synthetic presentation fixture. Invalid/expired/refused preselection/pending cases are additionally covered by native integration tests.' };
+    limits: 'Dev-run local Chromium, not independent Test/health/standing. Only original three fixed reference targets execute; larger register is a labeled synthetic presentation fixture. Invalid/expired/refused preselection/pending cases are additionally covered by native integration tests.' };
   writeFileSync(join(output, 'demo.json'), JSON.stringify(report, null, 2) + '\n'); console.log(JSON.stringify(report, null, 2));
 } finally { if (browser) await browser.close(); await illustrations.close(); await app.close(); rmSync(exercise.workspace.directory, { recursive: true, force: true }); }

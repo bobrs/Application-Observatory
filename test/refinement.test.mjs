@@ -17,7 +17,7 @@ test('context preselection validates known destinations on canonical and legacy 
   const boots = [...exercise.targets.values()].map((target) => target.bootId);
   const before = exercise.environments.map((item) => ({ observations: exercise.observations(item.id), bootstrap: exercise.events(`runtime:${item.id}`) }));
   const root = await app.inject('/');
-  assert.doesNotMatch(root.body, /<(form|input|button|script)\b/); assert.match(root.body, /row-context/);
+  assert.doesNotMatch(root.body, /<script|<form[^>]+method="post"|name="csrf"/); assert.match(root.body, /row-context/);
   assert.doesNotMatch(root.body, /Executive portfolio|Applications &amp; next decisions/);
   for (const route of ['/reference', '/applications/hello-observatory']) for (const item of exercise.environments) {
     const response = await app.inject(`${route}?destination=${item.id}`); assert.equal(response.statusCode, 200);

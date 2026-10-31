@@ -49,7 +49,7 @@ test('executive-to-application flow preserves provenance, decision authority, un
   const app = createApplication(exercise.workspace.directory, exercise);
   try {
     let root = await app.inject('/');
-    assert.doesNotMatch(root.body, /<(form|input|button|script)\b|name="candidateId"/);
+    assert.doesNotMatch(root.body, /<script|<form[^>]+method="post"|name="csrf"|name="candidateId"/);
     assert.equal(exercise.latestObservation('test-reference'), null); // Portfolio GET does not manufacture a witness.
     const canonical = await app.inject('/applications/hello-observatory');
     assert.match(canonical.headers['content-security-policy'], /form-action 'self'/);
