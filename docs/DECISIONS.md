@@ -98,6 +98,12 @@ The safeguard is to verify this repository's root and remote before each task, u
 - **Change:** focused external target navigation; atomic two-ledger read snapshots with frozen evaluation, exact scope and canonical complete selected configuration fingerprint; explicit safe JSON record/packet/page allowlists and original witness preservation. Unknown receipts remain unknown. Legacy directive lookups now respect their own archive cutoff; original local archive cross-ledger navigation is explicitly outside pinned investigation.
 - **Boundary:** no dependencies, migrations, provider access, new operational controls, dispatch/gate changes or collection requests. Source worker prepares a committed candidate only; supervisor owns review/publication/deployment and separate evaluation. Developer tests are not independent Test acceptance.
 
+## 2026-10-31 — AO-X02-4 saved-versus-current evidence comparison
+
+- **Authority and scope:** ao-ui Dev implementing [Issue #34](https://github.com/bobrs/Application-Observatory/issues/34) under delegated supervisor assignment, from verified canonical `main` at `d786e4507fbae777f48cbd5c65751cb62e34f04f`; new branch preserves X02-3 source history.
+- **Change:** [versioned compact comparison](COMPARISON_V1.md), with required baseline descriptor, paired SQLite read view, exact new record counts, separate selected-evidence/projection changes, frozen baseline and current reevaluation of its observations. Native safe references and unknown receipts/original continuation witnesses retain their meaning; planned remains metadata-only. Evidence v1 only gains additive comparison links.
+- **Boundary:** existing configured-credential guard applies to every new output. No schema/configuration/dependency/collector/operational-gate changes, network collection, external AI or provider access. Source worker commits candidate; supervisor performs publication, source-independent evaluation and rollout separately. Developer checks are not independent Test acceptance.
+
 ## Change practice
 
 New understanding should modify this record transparently. Preserve meaningful objections, deviations, and rationale, especially when changing the project goal or crossing into live deployment authority.

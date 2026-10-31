@@ -4,6 +4,10 @@ Design proposal for [Issue #26](https://github.com/bobrs/Application-Observatory
 
 People should quickly see **what version is reported where, what responded, and who the sources identify**. Detailed safe JSON is a first-class outcome: an authorized AI can investigate through its existing tools, then return to compare separately collected evidence. Observatory does not become that AI's repair controller. UI deployment controls remain secondary.
 
+## X02-4 delivered source scope — 2026-10-31
+
+[Issue #34](https://github.com/bobrs/Application-Observatory/issues/34) adds the saved-versus-current comparison journey to accepted X02-3 baseline `d786e4507fbae777f48cbd5c65751cb62e34f04f`. [The comparison read contract](COMPARISON_V1.md) describes mandatory baseline descriptors, atomic paired read projections, compact safe summaries, exact added counts, saved-observation freshness reevaluation, budgets and unavailable-context behavior. The original manual-comparison proposal below remains historical design provenance. No collection, repair or verification action is triggered by opening the comparison.
+
 ## X02-3 delivered source scope — 2026-10-31
 
 [Issue #32](https://github.com/bobrs/Application-Observatory/issues/32) implements focused external target pages, safe current/pinned evidence packets and bounded safe records/pages from the X02-2 baseline `5b5acfe678abf9cea7c790a09a3a03b921cff816`. [The implemented read contract](EVIDENCE_V1.md) documents exact routes, schema, omission policy, configuration fingerprints, two-ledger snapshots, budgets and limitations. Existing managed controls remain at their application anchor; local reference/normal modes remain separate. Earlier planned/proposed language below records the accepted design at its original stage; Dev implementation does not imply supervisor acceptance, live deployment or independent Test.

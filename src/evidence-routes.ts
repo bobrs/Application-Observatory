@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { EvidenceReader, evidenceQuery, snapshotQuery } from './evidence.js';
+import { comparisonPage } from './comparison-views.js';
 import { ExternalRuntimeError } from './external-runtime.js';
 import { escapeHtml as e, layout } from './views.js';
 
@@ -37,7 +38,7 @@ function focusedPage(reader: EvidenceReader, slug: string, targetId: string, raw
     ${known && !currentVersion && 'version' in known ? `<p>Historical last-known version ${e(String(known.version))} · collected ${e(String(known.observedAt))}. This is not a current version.</p>${details(known)}` : details(observation)}
     ${facts ? `<p>Response: ${currentVersion ? 'A successful reported version read supports responsiveness at collection only.' : 'No successful current read established.'} HTTP status and latency: uncollected. Health and independent Test: not evaluated.</p>` : ''}
     <dl><dt>Exact current scope</dt><dd>backend ${e(packet.scope.backendId)} · application ${e(packet.scope.applicationId)} · target ${e(packet.scope.destinationId)} · incarnation ${e(packet.scope.instanceId)}</dd></dl></section>
-    <section class="panel evidence-handoff"><h2>Evidence handoff</h2><div class="placement-links"><a href="${e(packet.links.current)}">Open current evidence JSON</a><a href="${e(packet.links.snapshot)}" download="observatory-${e(target.id)}-snapshot.json">Download snapshot JSON</a><a href="${e(snapshotHtml)}">Open pinned target page</a></div>
+    <section class="panel evidence-handoff"><h2>Evidence handoff</h2><div class="placement-links"><a href="${e(packet.links.current)}">Open current evidence JSON</a><a href="${e(packet.links.snapshot)}" download="observatory-${e(target.id)}-snapshot.json">Download snapshot JSON</a><a href="${e(snapshotHtml)}">Open pinned target page</a><a href="${e(packet.links.compare)}">Compare this snapshot with current evidence</a></div>
     <label>Copyable snapshot link (same server; access required)<input class="snapshot-link" readonly value="${e(packet.links.snapshot)}" aria-label="Copyable snapshot link"></label>
     <p class="source-note">Pinned selection freezes both ledgers and evaluation time. A changed configuration or missing retained evidence makes the link unavailable. Save downloaded JSON for an enduring copy. Safe exports withhold unrestricted source/detail/actor/rationale. Collector identity, deployment actor, trigger initiator and commit author remain unknown / uncollected.</p></section>
     ${facts ? `<section class="panel"><h2>Intent, result and read-back</h2><dl>${fact('Desired directive', facts.directive, 'None recorded.')}${fact('Separate receipt', facts.receipt, facts.directive ? 'Result not received; execution is not established.' : 'No directive.')}${fact('Latest observation', facts.observation, 'None collected.')}${fact('Historical last-known observation', facts.lastKnown, 'None collected.')}${fact('Continuation decision', facts.reconciliation, 'None recorded.')}${fact('Original continuation witness', facts.witness, 'None recorded.')}</dl><p>Receipt condition: ${e(facts.receiptCondition)}. Execution unknown: ${facts.executionUnknown ? 'yes' : 'no'}. Contradictory: ${facts.contradictory ? 'yes' : 'no'}; freshness is separate. ${facts.reconciled ? 'Witnessed continuation is current at evaluation; the original receipt outcome remains unchanged.' : ''}</p><p>A matching read-back does not turn a missing or unknown receipt into success. These are read projections, not authorization or independent acceptance.</p></section>
@@ -59,6 +60,25 @@ export function evidenceRoutes(app: FastifyInstance, reader: EvidenceReader, cre
       return reply.code(error instanceof ExternalRuntimeError ? error.statusCode : 500).type('text/html').send(layout('Pinned snapshot unavailable', `<h1>Pinned snapshot unavailable</h1><p>${e(error instanceof ExternalRuntimeError ? error.message : 'Evidence unavailable.')}</p><a href="/environments">Return to environments</a>`));
     }
   });
+  for (const format of ['compare', 'comparison.json'] as const) {
+    app.get<{ Params: Params }>(`${base}/${format}`, async (request, reply) => {
+      try {
+        const query = evidenceQuery(request.raw.url ?? '');
+        if (!query.snapshot) throw new ExternalRuntimeError('Evidence comparison requires a complete baseline snapshot descriptor.');
+        const value = reader.compare(request.params.slug, request.params.targetId, query.snapshot);
+        assertSafe(value);
+        if (format === 'comparison.json') return reply.type('application/json').header('Referrer-Policy', 'no-referrer').header('Content-Disposition', `inline; filename="observatory-${request.params.targetId}-comparison.json"`).send(value);
+        const html = comparisonPage(value); assertSafe(html);
+        if (Buffer.byteLength(html) > 256 * 1024) throw new ExternalRuntimeError('Evidence comparison unavailable: HTML exceeds its bounded budget; use comparison JSON.', 413);
+        return reply.type('text/html').send(html);
+      } catch (error) {
+        const status = error instanceof ExternalRuntimeError ? error.statusCode : 500;
+        const message = error instanceof ExternalRuntimeError ? error.message : 'Evidence unavailable.';
+        return format === 'comparison.json' ? reply.code(status).type('application/json').send({ error: 'Evidence comparison unavailable', message })
+          : reply.code(status).type('text/html').send(layout('Evidence comparison unavailable', `<h1>Evidence comparison unavailable</h1><p>${e(message)}</p><a href="/environments">Return to environments</a>`));
+      }
+    });
+  }
   for (const [path, kind, single] of [['/evidence.json', null, false], ['/records/events', 'events', false], ['/records/directives', 'directives', false], ['/records/events/:recordId', 'events', true], ['/records/directives/:recordId', 'directives', true]] as const) {
     app.get<{ Params: Params }>(`${base}${path}`, async (request, reply) => {
       try {
