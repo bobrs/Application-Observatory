@@ -200,5 +200,24 @@ test('large mixed-scope history stays bounded with measured cold and warm respon
   const large = await json(g.app, `/applications/${long}/targets/${long}/evidence.json`);
   assert.throws(() => g.reader.context('x'.repeat(161), long), /bounded read-link limit/); assert.ok(Buffer.byteLength(JSON.stringify(large)) <= PACKET_BUDGET);
   assert.equal(large.completeness.boundedManifest, true, 'Maximum bounded IDs must exercise the overflow branch');
+  assert.equal(large.facts.freshAtEvaluation, true);
+  const manifestHtml = await g.app.inject(`/applications/${long}/targets/${long}`);
+  assert.equal(manifestHtml.statusCode, 200);
+  assert.match(manifestHtml.body, /Reported version 1.0.0/);
+  assert.match(manifestHtml.body, /Fresh at this evaluation/);
+  assert.match(manifestHtml.body, /Inline consequential records omitted by the packet budget/);
+  assert.match(manifestHtml.body, /Packet size budget exceeded/);
+  assert.ok(manifestHtml.body.includes(g.at()));
+  assert.doesNotMatch(manifestHtml.body, /Current version unknown|No observation received in this exact current scope|No successful current read established|No consequential records in the bounded preview/);
+  const unknownAt = new Date(Date.parse(g.at()) + 1000).toISOString();
+  sql.run(`u${'x'.repeat(119)}`, long, long, long, 'i'.repeat(120), null, 'observation', 'Withheld collector', '', 'unknown', null, null, null, unknownAt, null, null, g.at(), '{}');
+  const unknownManifest = await json(g.app, `/applications/${long}/targets/${long}/evidence.json`);
+  assert.equal(unknownManifest.completeness.boundedManifest, true);
+  assert.equal(unknownManifest.facts.observationSummary.outcome, 'unknown');
+  assert.equal(unknownManifest.facts.observationSummary.version, null);
+  const unknownHtml = await g.app.inject(`/applications/${long}/targets/${long}`);
+  assert.match(unknownHtml.body, /Latest unknown/);
+  assert.match(unknownHtml.body, /Historical last-known version 1.0.0/);
+  assert.doesNotMatch(unknownHtml.body, /No observation received in this exact current scope|No consequential records in the bounded preview/);
   if (large.completeness.boundedManifest) { assert.deepEqual(large.records, []); assert.ok(large.facts.observation); assert.ok(large.preview.events.first); assert.match(large.gaps.join(' '), /budget exceeded/); }
 });

@@ -152,6 +152,7 @@ export class EvidenceReader {
       const executionUnknown = !!directive && (!receipt || receipt.outcome === 'unknown');
       const unresolved = !!directive && (executionUnknown || (receipt?.outcome === 'completed' && !resolved)) && !reconciled;
       const ref = (row: Row | undefined, kind: 'events' | 'directives' = 'events') => row ? this.recordLink(base, kind, String(kind === 'events' ? row.event_id : row.id), snapshot) : null;
+      const observationSummary = (row: Row | undefined): SafeRecord | null => row ? { id: String(row.event_id), kind: 'observation', recordRef: ref(row)!, outcome: row.outcome, version: row.version, artifactId: row.artifact_id, bootId: row.boot_id, observedAt: row.observed_at, recordedAt: row.recorded_at } : null;
       const records = new Map<string, ReturnType<EvidenceReader['safeRecord']>>();
       for (const row of [observation, known, receipt, reconciliation, witness, witnessReceipt]) if (row) records.set(String(row.event_id), this.safeRecord(row, 'events', base, snapshot));
       const events = planned ? null : this.page(target, snapshot, base, 'events'); const directives = planned ? null : this.page(target, snapshot, base, 'directives');
@@ -161,7 +162,7 @@ export class EvidenceReader {
       for (const record of directives?.records ?? []) directiveRecords.set(record.id, record);
       const packet = { packetSchema: PACKET_SCHEMA, projectionSource, scope: { kind: 'current', backendId: snapshot.backend, applicationId: application.id, destinationId: target.id, instanceId: snapshot.instance },
         configuration: this.declarations(slug, targetId), snapshot, requestedHistoricalView: 'Client-selected cutoffs/time are a historical view, not an authenticated capture attestation.',
-        facts: planned ? null : { observation: ref(observation), lastKnown: ref(known), directive: ref(directive, 'directives'), receipt: ref(receipt), reconciliation: ref(reconciliation), witness: ref(witness), witnessReceipt: ref(witnessReceipt),
+        facts: planned ? null : { observation: ref(observation), lastKnown: ref(known), observationSummary: observationSummary(observation), lastKnownSummary: observationSummary(known), directive: ref(directive, 'directives'), receipt: ref(receipt), reconciliation: ref(reconciliation), witness: ref(witness), witnessReceipt: ref(witnessReceipt),
           freshAtEvaluation: fresh, contradictory, executionUnknown, unresolved, reconciled, receiptCondition: !directive ? 'none' : !receipt ? 'missing' : receipt.outcome === 'unknown' ? 'unknown' : receipt.outcome === 'failed' ? 'failed' : resolved ? 'completed' : 'completed-unconfirmed',
           httpStatus: { value: null, availability: 'uncollected' }, durationMs: { value: null, availability: 'uncollected' }, health: 'not-evaluated', independentTest: 'not-evaluated' },
         attribution: { commitAuthor: uncollected(), triggerInitiator: uncollected(), deploymentActor: uncollected(), authenticatedHuman: uncollected() },
