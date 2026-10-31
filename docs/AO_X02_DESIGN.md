@@ -4,6 +4,10 @@ Design proposal for [Issue #26](https://github.com/bobrs/Application-Observatory
 
 People should quickly see **what version is reported where, what responded, and who the sources identify**. Detailed safe JSON is a first-class outcome: an authorized AI can investigate through its existing tools, then return to compare separately collected evidence. Observatory does not become that AI's repair controller. UI deployment controls remain secondary.
 
+## X02-3 delivered source scope — 2026-10-31
+
+[Issue #32](https://github.com/bobrs/Application-Observatory/issues/32) implements focused external target pages, safe current/pinned evidence packets and bounded safe records/pages from the X02-2 baseline `5b5acfe678abf9cea7c790a09a3a03b921cff816`. [The implemented read contract](EVIDENCE_V1.md) documents exact routes, schema, omission policy, configuration fingerprints, two-ledger snapshots, budgets and limitations. Existing managed controls remain at their application anchor; local reference/normal modes remain separate. Earlier planned/proposed language below records the accepted design at its original stage; Dev implementation does not imply supervisor acceptance, live deployment or independent Test.
+
 ## X02-2 delivered source scope — 2026-10-31
 
 The Dev source increment for [Issue #27](https://github.com/bobrs/Application-Observatory/issues/27), based on `31565bca3b1ace5990c9a6a24af15607f80c86b4`, implements `/environments` plus Applications/Environments navigation and native GET filters on both overview and portfolio. The original proposal below remains design provenance. Placement cards use the existing exact `/applications/:slug#destination-:targetId` evidence section and existing scoped archives; application detail keeps its established cards and controls. **X02-3 focused routes, safe JSON/record exports and pinned snapshots remain planned.** No incomplete export affordance is exposed.

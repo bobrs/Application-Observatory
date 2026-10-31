@@ -1,4 +1,8 @@
 export const styles = `
+.target-focus dl, .evidence-handoff { overflow-wrap: anywhere; }
+.snapshot-link { width: 100%; box-sizing: border-box; font-family: monospace; }
+.target-focus details { margin-block: 1rem; }
+
 .primary-nav { display:flex; gap:8px; border-bottom:1px solid var(--line); padding-top:12px!important; padding-bottom:12px!important; }
 .primary-nav a { padding:10px 16px; text-decoration:none; border-radius:5px; font-size:14px; font-weight:650; }
 .primary-nav a[aria-current] { background:var(--green); color:white; }

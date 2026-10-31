@@ -87,9 +87,9 @@ try {
   await page.getByRole('link', { name: 'Reset filters', exact: true }).click();
   const anchor = page.locator('[data-placement=planned]').getByRole('link', { name: 'Target evidence', exact: false });
   const href = await anchor.getAttribute('href'); await anchor.click();
-  assert.equal(new URL(page.url()).hash, '#destination-planned'); assert.ok(href.endsWith('#destination-planned'));
-  assert.equal(await page.locator('#destination-planned').count(), 1);
-  // Application detail intentionally has existing controls, so do not capture it.
+  assert.equal(new URL(page.url()).pathname, '/applications/beta/targets/planned'); assert.ok(href.endsWith('/targets/planned'));
+  assert.equal(await page.getByRole('heading', { name: 'Configured only', exact: true }).count(), 1);
+  // The planned focused page contains no operational controls; return to the register for capture.
   await page.goto(`${address}/`); await page.setViewportSize({ width: 390, height: 844 }); await capture('applications-mobile');
   assert.deepEqual(rowCounts(), before); assert.equal(blockedRequests, 0); assert.deepEqual(errors, []);
   const sourceFiles = [...new Set(execFileSync('git', ['ls-files', '--cached', '--others', '--exclude-standard', '--', 'src', 'scripts', 'test', 'README.md', 'docs/AO_X02_DESIGN.md'], { encoding: 'utf8' }).trim().split('\n'))].sort();
@@ -97,7 +97,7 @@ try {
   for (const file of sourceFiles) { sourceDigest.update(`${file}\0`); sourceDigest.update(readFileSync(file)); sourceDigest.update('\0'); }
   const report = { fixture: 'Synthetic in-process configuration and temporary SQLite only; no target processes or network collection', source: execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim(),
     sourceFiles, sourceTreeSha256: sourceDigest.digest('hex'), dirty: !!execFileSync('git', ['status', '--porcelain'], { encoding: 'utf8' }).trim(), runtime: process.version, platform: `${process.platform}/${process.arch}`, browser: browser.version(),
-    captures, checks: ['Desktop/mobile no horizontal overflow', 'Keyboard skip and main navigation; Enter submits native GET filters', 'URL filters, back navigation, active link and reset', 'Exact placement evidence anchor', 'All fixture ledger counts unchanged; zero external requests'], result: 'PASS — developer evidence only' };
+    captures, checks: ['Desktop/mobile no horizontal overflow', 'Keyboard skip and main navigation; Enter submits native GET filters', 'URL filters, back navigation, active link and reset', 'Exact focused placement route', 'All fixture ledger counts unchanged; zero external requests'], result: 'PASS — developer evidence only' };
   writeFileSync(join(output, 'report.json'), `${JSON.stringify(report, null, 2)}\n`);
   console.log(JSON.stringify(report));
 } finally { await browser?.close(); await app.close(); catalog.close(); rmSync(directory, { recursive: true, force: true }); }

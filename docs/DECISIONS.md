@@ -92,6 +92,12 @@ The safeguard is to verify this repository's root and remote before each task, u
 - **Boundary:** presentation and existing GET-route refinement only. No controller/readiness/authorization, artifact/launcher/target/observation/rollback, schema/seed/registry, dependencies/framework, integration/permission/IAM or deployment changes. Synthetic sizes are not runnable targets. Historical metadata and missing-receipt uncertainty remain intact; actor declarations are not standing or credentials.
 - **Stop:** commit/push an unmerged PR linked to Issue #11 with exact source/final-head checks, desktop/mobile keyboard/preselection/pending/consumed evidence and existing real upgrade/rollback regressions. Await PM review and separate Sponsor merge authorization. No CI, external deployment, unrelated project or GhostSentry3 access; Dev checks are not independent Test acceptance.
 
+## 2026-10-31 — AO-X02-3 focused evidence source increment
+
+- **Authority and scope:** ao-ui Dev implementing [Issue #32](https://github.com/bobrs/Application-Observatory/issues/32) under delegated supervisor assignment, from verified canonical `main` at `5b5acfe678abf9cea7c790a09a3a03b921cff816`. The [accepted design](AO_X02_DESIGN.md) supplies the bounded contract; [implemented safe read behavior](EVIDENCE_V1.md) records routes and limitations.
+- **Change:** focused external target navigation; atomic two-ledger read snapshots with frozen evaluation, exact scope and canonical complete selected configuration fingerprint; explicit safe JSON record/packet/page allowlists and original witness preservation. Unknown receipts remain unknown. Legacy directive lookups now respect their own archive cutoff; original local archive cross-ledger navigation is explicitly outside pinned investigation.
+- **Boundary:** no dependencies, migrations, provider access, new operational controls, dispatch/gate changes or collection requests. Source worker prepares a committed candidate only; supervisor owns review/publication/deployment and separate evaluation. Developer tests are not independent Test acceptance.
+
 ## Change practice
 
 New understanding should modify this record transparently. Preserve meaningful objections, deviations, and rationale, especially when changing the project goal or crossing into live deployment authority.
