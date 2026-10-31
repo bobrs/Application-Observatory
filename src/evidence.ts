@@ -5,6 +5,7 @@ import { ExternalRuntimeError, type ExternalConfig, type ExternalTarget } from '
 
 export const PROJECTION = 'observatory-projection-v1';
 export const PACKET_SCHEMA = 'observatory-evidence-v1';
+export const COMPARISON_SCHEMA = 'observatory-comparison-v1';
 export const PACKET_BUDGET = 128 * 1024;
 const canonical = (value: unknown): string => Array.isArray(value) ? `[${value.map(canonical).join(',')}]` : value && typeof value === 'object'
   ? `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonical((value as Record<string, unknown>)[key])}`).join(',')}}` : JSON.stringify(value);
@@ -168,12 +169,94 @@ export class EvidenceReader {
         attribution: { commitAuthor: uncollected(), triggerInitiator: uncollected(), deploymentActor: uncollected(), authenticatedHuman: uncollected() },
         records: [...records.values()], directives: [...directiveRecords.values()],
         preview: { events: events && { ...events, records: events.records.map((record) => record.recordRef) }, directives: directives && { ...directives, records: directives.records.map((record) => record.recordRef) } },
-        links: { current: `${base}/evidence.json`, snapshot: `${base}/evidence.json?${snapshotQuery(snapshot)}`, focused: base,
+        links: { current: `${base}/evidence.json`, snapshot: `${base}/evidence.json?${snapshotQuery(snapshot)}`, focused: base, compare: `${base}/compare?${snapshotQuery(snapshot)}`, comparison: `${base}/comparison.json?${snapshotQuery(snapshot)}`,
           originalLocalArchives: { scope: 'logical application/destination across retained backends and incarnations; private unrestricted text, separately accessible; initial pages freeze one ledger only, legacy cross-ledger navigation leaves the pinned snapshot; use safe record/page links for pinned investigation', events: `${base}/history?through=${snapshot.eventsThrough}&before=${snapshot.eventsThrough + 1}`, directives: `${base}/directives?through=${snapshot.directivesThrough}&before=${snapshot.directivesThrough + 1}` } },
         gaps: ['Unrestricted source/detail/actor/rationale text withheld; attribution is not authenticated.', 'A receipt is separate from runtime read-back; a matching version never resolves an unknown receipt.', 'Health, independent Test, HTTP status, latency and deployment attribution are uncollected or not evaluated.', ...(planned ? ['Planned configuration only; no active runtime facts or runtime preview.'] : [])],
         completeness: { boundedManifest: false, budgetBytes: PACKET_BUDGET } };
       if (Buffer.byteLength(JSON.stringify(packet)) <= PACKET_BUDGET) return packet;
       return { ...packet, records: [], directives: [], completeness: { boundedManifest: true, budgetBytes: PACKET_BUDGET }, gaps: [...packet.gaps, 'Packet budget exceeded; use the safe single-record references and bounded pages for every selected fact.'] };
+    }).deferred();
+  }
+  private compactSnapshot(slug: string, targetId: string, packet: ReturnType<EvidenceReader['packet']>) {
+    const { base } = this.context(slug, targetId);
+    const select = (ref: string | null, kind: 'events' | 'directives', keys: string[]): SafeRecord | null => {
+      if (!ref) return null;
+      // These relative references were generated above, never accepted as fetch URLs.
+      const recordId = decodeURIComponent(ref.split('?')[0]!.split('/').at(-1)!);
+      const record = this.readRecord(slug, targetId, kind, recordId, packet.snapshot).record;
+      return { id: record.id, kind: record.kind, recordRef: record.recordRef, ...Object.fromEntries(keys.filter((key) => Object.hasOwn(record, key)).map((key) => [key, record[key]])) };
+    };
+    const facts = packet.facts;
+    const observation = (value: SafeRecord | null): SafeRecord | null => value && { ...value, collectorSource: withheld(value.recordRef, 'producer-supplied declaration'), verifiedCollector: uncollected() };
+    return { snapshot: packet.snapshot,
+      facts: facts && {
+        observation: observation(facts.observationSummary), lastKnown: observation(facts.lastKnownSummary),
+        directive: select(facts.directive, 'directives', ['action', 'version', 'artifactId', 'expectedBootId', 'createdAt', 'declaredOperator', 'rationale']),
+        receipt: select(facts.receipt, 'events', ['directiveId', 'outcome', 'artifactId', 'startedAt', 'finishedAt', 'recordedAt', 'collectorSource', 'verifiedCollector']),
+        reconciliation: select(facts.reconciliation, 'events', ['directiveId', 'outcome', 'version', 'artifactId', 'bootId', 'observedAt', 'recordedAt', 'witnessEventId', 'witnessReceiptEventId', 'witnessReceiptOutcome', 'witnessRef', 'witnessReceiptRef', 'declaredOperator', 'rationale']),
+        freshAtEvaluation: facts.freshAtEvaluation, contradictory: facts.contradictory, executionUnknown: facts.executionUnknown,
+        unresolved: facts.unresolved, reconciled: facts.reconciled, receiptCondition: facts.receiptCondition,
+        httpStatus: facts.httpStatus, durationMs: facts.durationMs, health: facts.health, independentTest: facts.independentTest,
+      },
+      totals: { events: packet.preview.events?.total ?? null, directives: packet.preview.directives?.total ?? null },
+      links: { packet: packet.links.snapshot, focused: `${base}?${snapshotQuery(packet.snapshot)}`, events: packet.preview.events?.first ?? null, directives: packet.preview.directives?.first ?? null },
+    };
+  }
+  compare(slug: string, targetId: string, baseline: Snapshot) {
+    // Nested read transactions are savepoints on this connection. Both projections,
+    // their required records and counts therefore share the same SQLite read view.
+    return this.db.transaction(() => {
+      const baselinePacket = this.packet(slug, targetId, baseline);
+      const currentPacket = this.packet(slug, targetId);
+      const before = this.compactSnapshot(slug, targetId, baselinePacket);
+      const after = this.compactSnapshot(slug, targetId, currentPacket);
+      const changedFacts: Array<{ field: string; label: string; kind: 'evidence' | 'projection' }> = [];
+      const a = before.facts; const b = after.facts;
+      const freshAtCurrentEvaluation = (record: SafeRecord | null) => record ? record.outcome === 'observed' && Date.parse(after.snapshot.evaluatedAt) - Date.parse(String(record.observedAt)) <= 300_000 && Date.parse(after.snapshot.evaluatedAt) - Date.parse(String(record.recordedAt)) <= 300_000 : null;
+      const baselineReevaluation = { evaluatedAt: after.snapshot.evaluatedAt, observationFresh: a ? freshAtCurrentEvaluation(a.observation) : null, lastKnownFresh: a ? freshAtCurrentEvaluation(a.lastKnown) : null };
+      const baselineFreshnessChanged = a && b ? !!a.observation && a.freshAtEvaluation !== baselineReevaluation.observationFresh : null;
+      if (a && b) {
+        const differs = (left: SafeRecord | null, right: SafeRecord | null, keys: string[]) => JSON.stringify(left && keys.map((key) => left[key])) !== JSON.stringify(right && keys.map((key) => right[key]));
+        for (const [field, label, keys] of [
+          ['observation', 'Latest observation record or collection time', ['id', 'outcome', 'observedAt', 'recordedAt']],
+          ['lastKnown', 'Historical last-known observation', ['id', 'outcome', 'version', 'artifactId', 'bootId', 'observedAt', 'recordedAt']],
+          ['directive', 'Desired directive', ['id', 'action', 'version', 'artifactId', 'expectedBootId', 'createdAt']],
+          ['receipt', 'Separate receipt', ['id', 'directiveId', 'outcome', 'artifactId', 'startedAt', 'finishedAt', 'recordedAt']],
+          ['reconciliation', 'Continuation decision and original witnesses', ['id', 'directiveId', 'witnessEventId', 'witnessReceiptEventId', 'witnessReceiptOutcome', 'version', 'artifactId', 'bootId', 'observedAt', 'recordedAt']],
+        ] as const) if (differs(a[field], b[field], [...keys])) changedFacts.push({ field, label, kind: 'evidence' });
+        for (const [field, label] of [['outcome', 'Observation outcome'], ['version', 'Reported version'], ['artifactId', 'Observed artifact'], ['bootId', 'Observed boot']] as const) {
+          if ((a.observation?.[field] ?? null) !== (b.observation?.[field] ?? null)) changedFacts.push({ field: `observation.${field}`, label, kind: 'evidence' });
+        }
+        for (const [field, label] of [['freshAtEvaluation', 'Freshness at evaluation'], ['receiptCondition', 'Receipt/read-back condition'], ['executionUnknown', 'Execution uncertainty'], ['unresolved', 'Continuation requirement'], ['reconciled', 'Witnessed continuation at evaluation'], ['contradictory', 'Contradictory evidence']] as const) {
+          if (a[field] !== b[field]) changedFacts.push({ field, label, kind: 'projection' });
+        }
+      }
+      if (baselineFreshnessChanged) changedFacts.push({ field: 'baselineObservationFreshNow', label: 'Saved observation freshness at current evaluation', kind: 'projection' });
+      const addedEvents = a && b ? after.totals.events! - before.totals.events! : null;
+      const addedDirectives = a && b ? after.totals.directives! - before.totals.directives! : null;
+      const noNewRecords = addedEvents === null || addedDirectives === null ? null : addedEvents === 0 && addedDirectives === 0;
+      const evidenceChanged = changedFacts.some((change) => change.kind === 'evidence');
+      const projectionChanged = changedFacts.some((change) => change.kind === 'projection');
+      const result = { comparisonSchema: COMPARISON_SCHEMA, projectionSource: currentPacket.projectionSource,
+        scope: currentPacket.scope, configuration: currentPacket.configuration,
+        baseline: before, current: after, baselineReevaluation,
+        changes: { addedEvents, addedDirectives, noNewRecords, evidenceChanged, projectionChanged,
+          freshnessChanged: a && b ? baselineFreshnessChanged || a.freshAtEvaluation !== b.freshAtEvaluation : null,
+          selectedFreshnessChanged: a && b ? a.freshAtEvaluation !== b.freshAtEvaluation : null, baselineFreshnessChanged,
+          freshnessOnly: noNewRecords === true && !evidenceChanged && projectionChanged, changedFacts },
+        attribution: currentPacket.attribution,
+        links: { comparison: baselinePacket.links.compare, json: baselinePacket.links.comparison, current: currentPacket.links.current, focused: currentPacket.links.focused },
+        gaps: ['Comparison reads persisted evidence only; opening or refreshing does not collect, repair, dispatch or verify a workload.',
+          'Baseline evaluation and selection remain frozen; current freshness is evaluated at the current read time. Client-selected baseline time/cutoffs are not authenticated attestation.',
+          'Added counts cover exact current scope, including eventless directives. New records are not necessarily newer collections or successful changes.',
+          'A matching version or witnessed continuation never resolves a missing or unknown receipt. Health and independent Test are not evaluated.',
+          'Unrestricted attribution text is withheld; author, trigger, deployer and authenticated human remain uncollected.',
+          'Follow safe record/page links under their own baseline/current descriptors; original local archive navigation is outside pinned context.',
+          ...(!a ? ['Planned metadata only; runtime comparison and added runtime counts are not applicable.'] : [])],
+        completeness: { bounded: true, budgetBytes: PACKET_BUDGET, fullLedgersIncluded: false },
+      };
+      if (Buffer.byteLength(JSON.stringify(result)) > PACKET_BUDGET) return fail('Evidence comparison unavailable: response exceeds its bounded budget; use the individual safe snapshots.', 413);
+      return result;
     }).deferred();
   }
   readRecord(slug: string, targetId: string, kind: 'events' | 'directives', recordId: string, pinned?: Snapshot) {

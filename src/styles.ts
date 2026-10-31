@@ -1,4 +1,8 @@
 export const styles = `
+.comparison-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
+.comparison-snapshot { min-width: 0; overflow-wrap: anywhere; }
+.comparison-snapshot .version-number { font-size: clamp(24px, 3vw, 34px); font-weight: 700; line-height: 1.2; }
+@media (max-width: 760px) { .comparison-grid { grid-template-columns: minmax(0, 1fr); } }
 .target-focus dl, .evidence-handoff { overflow-wrap: anywhere; }
 .snapshot-link { width: 100%; box-sizing: border-box; font-family: monospace; }
 .target-focus details { margin-block: 1rem; }
