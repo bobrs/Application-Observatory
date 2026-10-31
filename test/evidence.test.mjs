@@ -14,11 +14,11 @@ const artifacts = [{ version: '1.0.0', artifactId: `sha256:${'a'.repeat(64)}` },
 const target = (id, mode = 'managed') => ({ id, name: `Target ${id}`, applicationId: 'app-alpha', stage: 'QA', instanceId: `instance-${id}`, mode, artifacts: mode === 'planned' ? [] : artifacts, limitations: 'Synthetic declaration; health and independent Test not evaluated.' });
 const config = (targets = [target('one'), target('two'), target('observe', 'observe-only'), target('planned', 'planned')]) => validateConfig({ schemaVersion: 1, backendId: 'fixture-backend', applications: [{ id: 'app-alpha', slug: 'alpha', name: 'Alpha <review>', purpose: 'Synthetic safe handoff fixture' }], targets });
 const base = '/applications/alpha/targets/one';
-function fixture(t, configuration = config()) {
+function fixture(t, configuration = config(), credential = token) {
   const directory = mkdtempSync(join(tmpdir(), 'ao-evidence-')); const catalog = openCatalog(join(directory, 'db'));
-  const app = createApplication(join(directory, 'db'), undefined, { config: configuration, token });
+  const app = createApplication(join(directory, 'db'), undefined, { config: configuration, token: credential });
   let clock = Date.now() - 30_000; let seq = 0;
-  const runtime = new ExternalRuntime(catalog.db, configuration, token, () => new Date(clock));
+  const runtime = new ExternalRuntime(catalog.db, configuration, credential, () => new Date(clock));
   const reader = new EvidenceReader(catalog.db, configuration, () => new Date(clock));
   t.after(async () => { await app.close(); catalog.close(); rmSync(directory, { recursive: true, force: true }); });
   const at = () => new Date(clock).toISOString();
@@ -220,4 +220,43 @@ test('large mixed-scope history stays bounded with measured cold and warm respon
   assert.match(unknownHtml.body, /Historical last-known version 1.0.0/);
   assert.doesNotMatch(unknownHtml.body, /No observation received in this exact current scope|No consequential records in the bounded preview/);
   if (large.completeness.boundedManifest) { assert.deepEqual(large.records, []); assert.ok(large.facts.observation); assert.ok(large.preview.events.first); assert.match(large.gaps.join(' '), /budget exceeded/); }
+});
+
+
+test('known configured bearer in native IDs or boot identity fails closed on every new GET/HEAD export surface', async (t) => {
+  for (const field of ['bootId', 'eventId']) {
+    const f = fixture(t); const event = f.observe('one', 'observed', artifacts[0], { [field]: token });
+    const packet = f.reader.packet('alpha', 'one'); // The selector remains credential-independent.
+    assert.ok(JSON.stringify(packet).includes(token));
+    const before = counts(f.catalog.db);
+    for (const method of ['GET', 'HEAD']) for (const url of [base, `${base}?${snapshotQuery(packet.snapshot)}`, packet.links.current, packet.links.snapshot, `${base}/records/events/${encodeURIComponent(event.eventId)}`, packet.facts.observation, packet.preview.events.first, `${base}/records/events`]) {
+      const response = await f.app.inject({ method, url });
+      assert.equal(response.statusCode, 409, `${field} ${method} ${url.split('?')[0]}`);
+      assert.ok(!response.body.includes(token)); assert.ok(!JSON.stringify(response.headers).includes(token));
+      assert.ok(!response.body.includes(encodeURIComponent(token)));
+      if (method === 'GET') assert.match(response.body, /Evidence unavailable/);
+    }
+    assert.deepEqual(counts(f.catalog.db), before);
+  }
+  // Directive native identity and its URL reference have the same boundary protection.
+  const f = fixture(t); const directive = f.request();
+  f.catalog.db.prepare('UPDATE external_directives SET id=? WHERE id=?').run(token, directive.id);
+  const packet = f.reader.packet('alpha', 'one');
+  for (const method of ['GET', 'HEAD']) for (const url of [base, packet.links.current, packet.links.snapshot, packet.facts.directive, `${base}/records/directives/${token}`, packet.preview.directives.first, `${base}/records/directives`]) {
+    const response = await f.app.inject({ method, url }); assert.equal(response.statusCode, 409); assert.ok(!response.body.includes(token)); assert.ok(!JSON.stringify(response.headers).includes(token));
+  }
+});
+
+test('known credential in configuration metadata is rejected before HTML rendering, including URI encoded forms', async (t) => {
+  const credential = 'synthetic/native+opaque=long-private-value';
+  for (const value of [credential, encodeURIComponent(credential), encodeURIComponent(credential).toLowerCase(), encodeURIComponent(credential).replace('%2F', '%2f')]) {
+    const configuration = config(); configuration.applications[0].name = `Configured ${value}`;
+    const f = fixture(t, validateConfig(configuration), credential);
+    const packet = f.reader.packet('alpha', 'one'); const before = counts(f.catalog.db);
+    for (const method of ['GET', 'HEAD']) for (const url of [base, `${base}?${snapshotQuery(packet.snapshot)}`, packet.links.current, packet.links.snapshot]) {
+      const response = await f.app.inject({ method, url }); assert.equal(response.statusCode, 409);
+      for (const forbidden of [credential, encodeURIComponent(credential), value]) { assert.ok(!response.body.includes(forbidden)); assert.ok(!JSON.stringify(response.headers).includes(forbidden)); }
+    }
+    assert.deepEqual(counts(f.catalog.db), before);
+  }
 });

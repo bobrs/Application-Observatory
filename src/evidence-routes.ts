@@ -3,8 +3,22 @@ import { EvidenceReader, evidenceQuery, snapshotQuery } from './evidence.js';
 import { ExternalRuntimeError } from './external-runtime.js';
 import { escapeHtml as e, layout } from './views.js';
 
-function focusedPage(reader: EvidenceReader, slug: string, targetId: string, rawUrl: string) {
+// A trusted protocol field can accidentally repeat the actual configured credential.
+// Fail closed rather than alter a native identity or let JSON/URL escaping hide it.
+function credentialGuard(credential: string) {
+  const encoded = encodeURIComponent(credential);
+  const normalizeEscapes = (value: string) => value.replace(/%[a-fA-F0-9]{2}/g, (part) => part.toUpperCase());
+  const inspect = (value: unknown): void => {
+    if (typeof value === 'string' && (value.includes(credential) || normalizeEscapes(value).includes(encoded))) throw new ExternalRuntimeError('Evidence unavailable: protected credential detected.', 409);
+    if (Array.isArray(value)) { for (const item of value) inspect(item); }
+    else if (value && typeof value === 'object') { for (const item of Object.values(value)) inspect(item); }
+  };
+  return inspect;
+}
+
+function focusedPage(reader: EvidenceReader, slug: string, targetId: string, rawUrl: string, assertSafe: (value: unknown) => void) {
   const query = evidenceQuery(rawUrl); const packet = reader.packet(slug, targetId, query.snapshot);
+  assertSafe(packet);
   const { application, target, base } = reader.context(slug, targetId);
   const facts = packet.facts;
   const observation = packet.records.find((record) => record.recordRef === facts?.observation) ?? facts?.observationSummary ?? undefined;
@@ -31,12 +45,14 @@ function focusedPage(reader: EvidenceReader, slug: string, targetId: string, raw
     <section class="panel"><h2>Original local archives</h2><p>These separately accessible local archives retain unrestricted text. They widen scope to this logical application/target across earlier backends and incarnations; historical evidence is not current state. The initial page freezes its own ledger only. Following legacy cross-ledger links leaves the pinned snapshot; use safe record and page links above for pinned investigation.</p><p><a href="${e(packet.links.originalLocalArchives.events)}">Original local event archive</a> · <a href="${e(packet.links.originalLocalArchives.directives)}">Original local directive archive</a></p>${target.mode === 'managed' ? `<p><a href="/applications/${encodeURIComponent(slug)}#target-${encodeURIComponent(target.id)}">Existing managed controls →</a></p>` : `<p>${e(target.mode)} capability: no operational controls.</p>`}</section>
     <p><a href="${e(base)}">Refresh current target evidence</a> · <a href="/applications/${encodeURIComponent(slug)}#destination-${encodeURIComponent(target.id)}">Return to application target</a> · <a href="/environments?application=${encodeURIComponent(slug)}">Back to application environments</a></p>`, false, { active: 'environments' });
 }
-export function evidenceRoutes(app: FastifyInstance, reader: EvidenceReader) {
+export function evidenceRoutes(app: FastifyInstance, reader: EvidenceReader, credential: string) {
+  const assertSafe = credentialGuard(credential);
   type Params = { slug: string; targetId: string; recordId: string };
   const base = '/applications/:slug/targets/:targetId';
   app.get<{ Params: Params }>(base, async (request, reply) => {
     try {
-      const html = focusedPage(reader, request.params.slug, request.params.targetId, request.raw.url ?? '');
+      const html = focusedPage(reader, request.params.slug, request.params.targetId, request.raw.url ?? '', assertSafe);
+      assertSafe(html);
       if (Buffer.byteLength(html) > 256 * 1024) throw new ExternalRuntimeError('Focused page exceeds the response budget; use the bounded evidence JSON.', 413);
       return reply.type('text/html').send(html);
     } catch (error) {
@@ -48,6 +64,7 @@ export function evidenceRoutes(app: FastifyInstance, reader: EvidenceReader) {
       try {
         const { slug, targetId, recordId } = request.params; const query = evidenceQuery(request.raw.url ?? '', !!kind && !single);
         const value = !kind ? reader.packet(slug, targetId, query.snapshot) : single ? reader.readRecord(slug, targetId, kind, recordId, query.snapshot) : reader.readPage(slug, targetId, kind, query);
+        assertSafe(value);
         // Validated product token; never a supplied filename, path, or Content-Disposition value.
         return reply.type('application/json').header('Content-Disposition', `inline; filename="observatory-${targetId}-${kind ?? 'evidence'}.json"`).header('Referrer-Policy', 'no-referrer').send(value);
       } catch (error) {

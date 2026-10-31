@@ -90,7 +90,7 @@ export function createApplication(directory?: string, exercise?: Exercise, exter
   });
   app.get('/styles.css', async (_request, reply) => reply.type('text/css').send(styles));
   if (exercise) exerciseRoutes(app, exercise);
-  if (runtime) { externalRuntimeRoutes(app, runtime, csrf); evidenceRoutes(app, new EvidenceReader(catalog.db, runtime.config)); }
+  if (runtime) { externalRuntimeRoutes(app, runtime, csrf); evidenceRoutes(app, new EvidenceReader(catalog.db, runtime.config), external!.token); }
   app.setNotFoundHandler(async (_request, reply) => reply.code(404).type('text/html').send(notFoundPage()));
   return app;
 }
